@@ -93,7 +93,7 @@ function RegisterModal({ onClose, onRegister }) {
 
   const handleEnterPanel = () => {
     const initials = form.name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
-    onRegister({
+    const partnerData = {
       name: form.name,
       email: form.email,
       company: form.company,
@@ -108,7 +108,14 @@ function RegisterModal({ onClose, onRegister }) {
       nextPayout: "—",
       annualReferrals: 0,
       annualTarget: 5,
-    });
+    };
+    // Save account to localStorage
+    const accounts = JSON.parse(localStorage.getItem("lsi_accounts") || "[]");
+    const existing = accounts.findIndex(a => a.email.toLowerCase() === form.email.toLowerCase());
+    const accountEntry = { ...partnerData, password: form.password || form.nip || "lsicloud" };
+    if (existing >= 0) { accounts[existing] = accountEntry; } else { accounts.push(accountEntry); }
+    localStorage.setItem("lsi_accounts", JSON.stringify(accounts));
+    onRegister(partnerData);
     onClose();
   };
 
@@ -154,6 +161,11 @@ function RegisterModal({ onClose, onRegister }) {
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: "block", color: "#8aaecb", fontSize: 12, fontWeight: 600, marginBottom: 6, letterSpacing: "0.05em", textTransform: "uppercase" }}>NIP (opcjonalnie)</label>
               <input type="text" placeholder="000-000-00-00" value={form.nip} onChange={e => handle("nip", e.target.value)}
+                style={{ width: "100%", background: "#0a1628", border: "1px solid #1e3a5f", borderRadius: 8, padding: "10px 14px", color: "#e8f0fe", fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", color: "#8aaecb", fontSize: 12, fontWeight: 600, marginBottom: 6, letterSpacing: "0.05em", textTransform: "uppercase" }}>Hasło do konta *</label>
+              <input type="password" placeholder="Min. 6 znaków" value={form.password || ""} onChange={e => handle("password", e.target.value)}
                 style={{ width: "100%", background: "#0a1628", border: "1px solid #1e3a5f", borderRadius: 8, padding: "10px 14px", color: "#e8f0fe", fontSize: 14, outline: "none", boxSizing: "border-box" }} />
             </div>
             <div style={{ background: "#091220", border: "1px solid #1e3a5f", borderRadius: 10, padding: 16, marginBottom: 20, fontSize: 13, color: "#6b8cad", lineHeight: 1.7 }}>
@@ -246,7 +258,7 @@ function LevelBadge({ level }) {
 }
 
 // ─── LOGIN MODAL ──────────────────────────────────────────────────────────────
-function LoginModal({ onClose, onLogin }) {
+function LoginModal({ onClose, onLogin, onShowRegister }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -258,10 +270,32 @@ function LoginModal({ onClose, onLogin }) {
     setError("");
     setTimeout(() => {
       setLoading(false);
-      // Demo: any email/password works
-      onLogin();
+      // Admin check
+      if (email.toLowerCase() === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+        onLogin("admin");
+        onClose();
+        return;
+      }
+      // Check localStorage accounts
+      const accounts = JSON.parse(localStorage.getItem("lsi_accounts") || "[]");
+      const found = accounts.find(a => a.email.toLowerCase() === email.toLowerCase() && a.password === password);
+      if (found) {
+        const { password: _pw, ...partnerData } = found;
+        onLogin(partnerData);
+        onClose();
+      } else {
+        setError("Nieprawidłowy e-mail lub hasło. Sprawdź dane lub zarejestruj się.");
+      }
+    }, 900);
+  };
+
+  const loginDemo = () => {
+    setLoading(true);
+    setTimeout(() => {
+      setLoading(false);
+      onLogin(null); // null = load demo account
       onClose();
-    }, 1200);
+    }, 600);
   };
 
   return (
@@ -291,21 +325,570 @@ function LoginModal({ onClose, onLogin }) {
           <span style={{ color: "#3b9de8", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>Zapomniałem hasła</span>
         </div>
 
-        {error && <div style={{ background: "#1e0f0f", border: "1px solid #dc2626", borderRadius: 8, padding: "10px 14px", color: "#ef4444", fontSize: 13, marginBottom: 16 }}>{error}</div>}
+        {error && (
+          <div style={{ background: "#1e0f0f", border: "1px solid #dc2626", borderRadius: 8, padding: "10px 14px", color: "#ef4444", fontSize: 13, marginBottom: 16 }}>{error}</div>
+        )}
 
         <button onClick={submit} disabled={loading}
-          style={{ width: "100%", padding: "13px", background: "linear-gradient(135deg,#1e6fb5,#3b9de8)", border: "none", borderRadius: 10, color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer", opacity: loading ? 0.7 : 1 }}>
+          style={{ width: "100%", padding: "13px", background: "linear-gradient(135deg,#1e6fb5,#3b9de8)", border: "none", borderRadius: 10, color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer", opacity: loading ? 0.7 : 1, marginBottom: 12 }}>
           {loading ? "Logowanie…" : "Zaloguj się →"}
         </button>
 
-        <div style={{ textAlign: "center", marginTop: 20, color: "#5b7fa6", fontSize: 13 }}>
-          Nie masz konta? <span style={{ color: "#3b9de8", cursor: "pointer", fontWeight: 600 }} onClick={onClose}>Zarejestruj się</span>
+        {/* Divider */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+          <div style={{ flex: 1, height: 1, background: "#1e3a5f" }} />
+          <span style={{ color: "#3a4f6a", fontSize: 12 }}>lub</span>
+          <div style={{ flex: 1, height: 1, background: "#1e3a5f" }} />
         </div>
 
-        <div style={{ marginTop: 20, padding: "12px 14px", background: "#091220", border: "1px solid #1e3a5f", borderRadius: 8, fontSize: 12, color: "#5b7fa6", textAlign: "center" }}>
-          🔑 Demo: wpisz dowolny e-mail i hasło
+        {/* Demo login */}
+        <button onClick={loginDemo}
+          style={{ width: "100%", padding: "11px", background: "none", border: "1px solid #1e3a5f", borderRadius: 10, color: "#6b8cad", fontWeight: 600, fontSize: 14, cursor: "pointer", marginBottom: 20 }}>
+          🧪 Zaloguj się jako konto demo
+        </button>
+
+        <div style={{ textAlign: "center", color: "#5b7fa6", fontSize: 13 }}>
+          Nie masz konta?{" "}
+          <span style={{ color: "#3b9de8", cursor: "pointer", fontWeight: 600 }}
+            onClick={() => { onClose(); onShowRegister(); }}>
+            Zarejestruj się
+          </span>
         </div>
       </div>
+    </div>
+  );
+}
+
+
+// ─── ADMIN CREDENTIALS ───────────────────────────────────────────────────────
+const ADMIN_EMAIL = "admin@lsi-cloud.pl";
+const ADMIN_PASSWORD = "LSIadmin2026!";
+
+// ─── DEFAULT COMMISSION RATES ────────────────────────────────────────────────
+const DEFAULT_RATES = {
+  ambasador:  { bonus_gastro: 200, bonus_hotel: 300, recurring_pct: 0,  recurring_months: 0,  annual_bonus: 0    },
+  partner:    { bonus_gastro: 400, bonus_hotel: 600, recurring_pct: 6,  recurring_months: 12, annual_bonus: 0    },
+  premium:    { bonus_gastro: 700, bonus_hotel: 900, recurring_pct: 10, recurring_months: 24, annual_bonus: 3000 },
+};
+
+// ─── MOCK ALL-PARTNERS DATA (for admin view) ─────────────────────────────────
+const MOCK_ALL_PARTNERS = [
+  { id: 1, name: "Marek Kowalski",    email: "marek.kowalski@restauracja.pl", company: "Restauracja Pod Lipą", level: "Partner",         referrals: 9,  earned: 4820, pending: 1140 },
+  { id: 2, name: "Anna Wiśniewska",   email: "anna@hotelik.pl",               company: "Hotelik u Anny",       level: "Ambasador",       referrals: 3,  earned: 900,  pending: 300  },
+  { id: 3, name: "Piotr Kowalczyk",   email: "piotr@gastronet.pl",            company: "GastroNet Sp. z o.o.", level: "Partner Premium", referrals: 18, earned: 12400, pending: 2800 },
+  { id: 4, name: "Zofia Maj",         email: "zofia@hotelezłote.pl",          company: "Hotele Złote S.A.",    level: "Partner",         referrals: 7,  earned: 3200, pending: 0    },
+  { id: 5, name: "Tomasz Lewicki",    email: "t.lewicki@gastro.pl",           company: "Lewicki Gastro",       level: "Ambasador",       referrals: 2,  earned: 400,  pending: 0    },
+];
+
+const MOCK_ALL_REFERRALS = [
+  { id: 1,  partnerId: 1, partnerName: "Marek Kowalski",  company: "Pizzeria Napoli",     product: "Gastro", status: "active",    date: "2026-02-10", commission: 480, subscriptionValue: 299, recurring: 92,  months: 7  },
+  { id: 2,  partnerId: 1, partnerName: "Marek Kowalski",  company: "Hotel Bursztyn",      product: "Hotel",  status: "active",    date: "2026-01-22", commission: 700, subscriptionValue: 499, recurring: 138, months: 5  },
+  { id: 3,  partnerId: 1, partnerName: "Marek Kowalski",  company: "Kawiarnia Złota",     product: "Gastro", status: "pending",   date: "2026-03-01", commission: 0,   subscriptionValue: 0,   recurring: 0,   months: 0  },
+  { id: 4,  partnerId: 2, partnerName: "Anna Wiśniewska", company: "Pensjonat Morski",    product: "Hotel",  status: "active",    date: "2025-11-18", commission: 600, subscriptionValue: 499, recurring: 125, months: 10 },
+  { id: 5,  partnerId: 2, partnerName: "Anna Wiśniewska", company: "Food Truck Mama",     product: "Gastro", status: "pending",   date: "2026-03-08", commission: 0,   subscriptionValue: 0,   recurring: 0,   months: 0  },
+  { id: 6,  partnerId: 3, partnerName: "Piotr Kowalczyk", company: "Sieć Bistro 5x",      product: "Gastro", status: "active",    date: "2026-01-05", commission: 700, subscriptionValue: 299, recurring: 54,  months: 4  },
+  { id: 7,  partnerId: 3, partnerName: "Piotr Kowalczyk", company: "Aparthotel Sunrise",  product: "Hotel",  status: "active",    date: "2025-12-01", commission: 900, subscriptionValue: 699, recurring: 180, months: 6  },
+  { id: 8,  partnerId: 4, partnerName: "Zofia Maj",       company: "Restauracja Arkadia", product: "Gastro", status: "active",    date: "2026-02-20", commission: 400, subscriptionValue: 299, recurring: 88,  months: 3  },
+  { id: 9,  partnerId: 4, partnerName: "Zofia Maj",       company: "Hotel Paryski",       product: "Hotel",  status: "rejected",  date: "2026-01-10", commission: 0,   subscriptionValue: 0,   recurring: 0,   months: 0  },
+  { id: 10, partnerId: 5, partnerName: "Tomasz Lewicki",  company: "Jadłodajnia Domowa",  product: "Gastro", status: "pending",   date: "2026-03-10", commission: 0,   subscriptionValue: 0,   recurring: 0,   months: 0  },
+];
+
+function AdminPanel({ onLogout }) {
+  const [tab, setTab] = useState("overview"); // overview | referrals | partners | rates | payouts
+  const [rates, setRates] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("lsi_rates") || "null") || DEFAULT_RATES; } catch { return DEFAULT_RATES; }
+  });
+  const [ratesDraft, setRatesDraft] = useState(rates);
+  const [ratesSaved, setRatesSaved] = useState(false);
+  const [allReferrals, setAllReferrals] = useState(MOCK_ALL_REFERRALS);
+  const [filterPartner, setFilterPartner] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [markModal, setMarkModal] = useState(null); // referral to mark as realized
+  const [payoutModal, setPayoutModal] = useState(null); // partner to pay out
+
+  const saveRates = () => {
+    setRates(ratesDraft);
+    localStorage.setItem("lsi_rates", JSON.stringify(ratesDraft));
+    setRatesSaved(true);
+    setTimeout(() => setRatesSaved(false), 2500);
+  };
+
+  const markRealized = (ref) => {
+    const partner = MOCK_ALL_PARTNERS.find(p => p.id === ref.partnerId);
+    const level = partner?.level?.toLowerCase().replace(" ", "_").replace("partner_premium", "premium").replace("partner", "partner") || "ambasador";
+    const levelKey = level.includes("premium") ? "premium" : level.includes("partner") ? "partner" : "ambasador";
+    const r = rates[levelKey];
+    const bonus = ref.product === "Hotel" ? r.bonus_hotel : r.bonus_gastro;
+    const recurringMonthly = ref.subscriptionValue > 0 ? Math.round(ref.subscriptionValue * r.recurring_pct / 100) : 0;
+
+    setAllReferrals(prev => prev.map(item => item.id === ref.id
+      ? { ...item, status: "active", commission: bonus, recurring: recurringMonthly, months: r.recurring_months, subscriptionValue: item.subscriptionValue || 299 }
+      : item
+    ));
+    setMarkModal(null);
+  };
+
+  const totalPending = allReferrals.filter(r => r.status === "pending").length;
+  const totalActive = allReferrals.filter(r => r.status === "active").length;
+  const totalCommissions = allReferrals.reduce((s, r) => s + r.commission, 0);
+  const totalRecurring = allReferrals.filter(r => r.status === "active").reduce((s, r) => s + r.recurring, 0);
+
+  const filteredRefs = allReferrals
+    .filter(r => filterPartner === "all" || r.partnerId === parseInt(filterPartner))
+    .filter(r => filterStatus === "all" || r.status === filterStatus);
+
+  const LEVEL_COLOR = { "Ambasador": "#c084fc", "Partner": "#3b9de8", "Partner Premium": "#f59e0b" };
+  const S = { // styles shorthand
+    card: { background: "#0e1e3a", border: "1px solid #1e3a5f", borderRadius: 14, padding: "20px 24px" },
+    th: { color: "#5b7fa6", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", padding: "10px 14px", background: "#091220" },
+    td: (shade) => ({ padding: "12px 14px", borderBottom: "1px solid #0e1e3a", background: shade ? "#080f1e" : "#0b1628", fontSize: 13, color: "#c8d8e8" }),
+    input: { background: "#0a1628", border: "1px solid #1e3a5f", borderRadius: 7, padding: "8px 12px", color: "#e8f0fe", fontSize: 14, width: 90, textAlign: "right" },
+    tabBtn: (active) => ({ padding: "9px 18px", background: active ? "#1e3a5f" : "none", border: `1px solid ${active ? "#3b9de8" : "#1e3a5f"}`, borderRadius: 8, color: active ? "#e8f0fe" : "#5b7fa6", fontWeight: active ? 700 : 500, fontSize: 13, cursor: "pointer" }),
+  };
+
+  return (
+    <div style={{ minHeight: "100vh", background: "#060f1e", color: "#e8f0fe", fontFamily: "'DM Sans', sans-serif", display: "flex" }}>
+      <style>{"@import url('https://fonts.googleapis.com/css2?family=Sora:wght@700;800&family=DM+Sans:wght@400;500;600;700&display=swap')"}</style>
+
+      {/* Sidebar */}
+      <div style={{ width: 230, background: "#080f20", borderRight: "1px solid #1e3a5f", display: "flex", flexDirection: "column", padding: "28px 0", flexShrink: 0, position: "sticky", top: 0, height: "100vh" }}>
+        <div style={{ padding: "0 22px", marginBottom: 32 }}>
+          <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 17, color: "#e8f0fe" }}>LSI Cloud</div>
+          <div style={{ color: "#ef4444", fontSize: 11, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase" }}>Panel Administratora</div>
+        </div>
+        <div style={{ padding: "0 22px", marginBottom: 24 }}>
+          <div style={{ background: "#1a0a0a", border: "1px solid #7f1d1d", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#fca5a5" }}>
+            🔒 Tryb administracyjny
+          </div>
+        </div>
+        <nav style={{ flex: 1, padding: "0 14px" }}>
+          {[
+            { id: "overview",  icon: "◉", label: "Przegląd" },
+            { id: "referrals", icon: "◈", label: "Wszystkie polecenia", badge: totalPending },
+            { id: "partners",  icon: "◎", label: "Partnerzy" },
+            { id: "rates",     icon: "⬡", label: "Stawki prowizji" },
+            { id: "payouts",   icon: "◐", label: "Rozliczenia" },
+          ].map(item => (
+            <button key={item.id} onClick={() => setTab(item.id)}
+              style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 12px", background: tab === item.id ? "#1e3a5f" : "none", border: "none", borderRadius: 9, color: tab === item.id ? "#e8f0fe" : "#5b7fa6", fontWeight: tab === item.id ? 700 : 500, fontSize: 14, cursor: "pointer", marginBottom: 3, textAlign: "left" }}>
+              <span style={{ fontSize: 16 }}>{item.icon}</span>
+              {item.label}
+              {item.badge > 0 && <span style={{ marginLeft: "auto", background: "#ef4444", borderRadius: 10, padding: "2px 7px", fontSize: 11, fontWeight: 800, color: "#fff" }}>{item.badge}</span>}
+            </button>
+          ))}
+        </nav>
+        <div style={{ padding: "0 14px" }}>
+          <button onClick={onLogout} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 12px", background: "none", border: "none", borderRadius: 9, color: "#5b7fa6", fontSize: 14, cursor: "pointer" }}>← Wyloguj</button>
+        </div>
+      </div>
+
+      {/* Main content */}
+      <div style={{ flex: 1, overflow: "auto", padding: "36px 40px" }}>
+
+        {/* ── MARK AS REALIZED MODAL ── */}
+        {markModal && (() => {
+          const partner = MOCK_ALL_PARTNERS.find(p => p.id === markModal.partnerId);
+          const levelKey = (partner?.level || "").includes("Premium") ? "premium" : (partner?.level || "").includes("Partner") ? "partner" : "ambasador";
+          const r = rates[levelKey];
+          const bonus = markModal.product === "Hotel" ? r.bonus_hotel : r.bonus_gastro;
+          const subVal = markModal.subscriptionValue || 299;
+          const recurring = r.recurring_pct > 0 ? Math.round(subVal * r.recurring_pct / 100) : 0;
+          return (
+            <div style={{ position: "fixed", inset: 0, background: "rgba(6,15,30,0.92)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+              <div style={{ background: "#0e1e3a", border: "1px solid #1e3a5f", borderRadius: 16, width: "100%", maxWidth: 480, padding: "36px 40px" }}>
+                <h3 style={{ color: "#e8f0fe", fontFamily: "'Sora',sans-serif", fontSize: 20, fontWeight: 700, margin: "0 0 6px" }}>Oznacz jako zrealizowane</h3>
+                <p style={{ color: "#6b8cad", fontSize: 13, margin: "0 0 24px" }}>Potwierdź realizację polecenia i nalicz wynagrodzenie</p>
+
+                <div style={{ background: "#091220", border: "1px solid #1e3a5f", borderRadius: 10, padding: "14px 16px", marginBottom: 20 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 0" }}>
+                    {[["Firma", markModal.company], ["Produkt", markModal.product], ["Partner", partner?.name], ["Poziom", partner?.level]].map(([k,v]) => (
+                      <div key={k}><span style={{ color: "#5b7fa6", fontSize: 12 }}>{k}: </span><span style={{ color: "#e8f0fe", fontSize: 13, fontWeight: 600 }}>{v}</span></div>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ background: "#091220", border: "1px solid #22c55e33", borderRadius: 10, padding: "16px", marginBottom: 20 }}>
+                  <div style={{ color: "#22c55e", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12 }}>Naliczone wynagrodzenie</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "#8aaecb", fontSize: 13 }}>Premia jednorazowa ({markModal.product}):</span>
+                      <span style={{ color: "#e8f0fe", fontWeight: 700, fontSize: 15 }}>{bonus} zł</span>
+                    </div>
+                    {recurring > 0 && <>
+                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        <span style={{ color: "#8aaecb", fontSize: 13 }}>Prowizja miesięczna ({r.recurring_pct}% z {subVal} zł):</span>
+                        <span style={{ color: "#22c55e", fontWeight: 700, fontSize: 15 }}>+{recurring} zł/mies.</span>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        <span style={{ color: "#8aaecb", fontSize: 13 }}>Przez:</span>
+                        <span style={{ color: "#e8f0fe", fontSize: 13 }}>{r.recurring_months} miesięcy</span>
+                      </div>
+                      <div style={{ borderTop: "1px solid #1e3a5f", paddingTop: 8, display: "flex", justifyContent: "space-between" }}>
+                        <span style={{ color: "#8aaecb", fontSize: 13 }}>Łącznie (max):</span>
+                        <span style={{ color: "#f59e0b", fontWeight: 800, fontSize: 16 }}>{bonus + recurring * r.recurring_months} zł</span>
+                      </div>
+                    </>}
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 20 }}>
+                  <label style={{ color: "#8aaecb", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 8 }}>Wartość abonamentu klienta (zł/mies.)</label>
+                  <input type="number" defaultValue={subVal}
+                    onChange={e => setMarkModal(prev => ({ ...prev, subscriptionValue: parseInt(e.target.value) || 299 }))}
+                    style={{ ...S.input, width: "100%", textAlign: "left" }} />
+                </div>
+
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button onClick={() => setMarkModal(null)} style={{ flex: 1, padding: "11px", background: "none", border: "1px solid #1e3a5f", borderRadius: 9, color: "#6b8cad", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>Anuluj</button>
+                  <button onClick={() => markRealized(markModal)} style={{ flex: 2, padding: "11px", background: "linear-gradient(135deg,#166534,#22c55e)", border: "none", borderRadius: 9, color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>✓ Zatwierdź realizację</button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ── OVERVIEW TAB ── */}
+        {tab === "overview" && (
+          <>
+            <div style={{ marginBottom: 32 }}>
+              <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: 26, fontWeight: 800, margin: "0 0 6px" }}>Panel administratora</h1>
+              <p style={{ color: "#6b8cad", margin: 0, fontSize: 14 }}>Zarządzaj programem poleceń LSI Cloud</p>
+            </div>
+            <div style={{ display: "flex", gap: 16, marginBottom: 28, flexWrap: "wrap" }}>
+              {[
+                { label: "Aktywni partnerzy",    value: MOCK_ALL_PARTNERS.length, sub: "zarejestrowanych",        color: "#3b9de8",  icon: "👥" },
+                { label: "Polecenia do weryfik.", value: totalPending,             sub: "oczekują na decyzję",     color: "#ef4444",  icon: "⏳" },
+                { label: "Aktywne kontrakty",     value: totalActive,             sub: "przynosi prowizję",       color: "#22c55e",  icon: "✅" },
+                { label: "Prowizje miesięczne",   value: `${totalRecurring} zł`,  sub: "łącznie do wypłaty/mies.", color: "#f59e0b",  icon: "💰" },
+              ].map(c => (
+                <div key={c.label} style={{ ...S.card, flex: 1, minWidth: 160 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                    <span style={{ color: "#5b7fa6", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em" }}>{c.label}</span>
+                    <span style={{ fontSize: 18 }}>{c.icon}</span>
+                  </div>
+                  <div style={{ color: c.color, fontSize: 28, fontWeight: 800, fontFamily: "'Sora',sans-serif" }}>{c.value}</div>
+                  <div style={{ color: "#5b7fa6", fontSize: 12, marginTop: 6 }}>{c.sub}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Pending referrals quick action */}
+            {totalPending > 0 && (
+              <div style={{ ...S.card, marginBottom: 24 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                  <span style={{ fontWeight: 700, fontSize: 15, color: "#e8f0fe" }}>⚡ Polecenia wymagające decyzji ({totalPending})</span>
+                  <button onClick={() => setTab("referrals")} style={{ background: "none", border: "none", color: "#3b9de8", fontSize: 13, cursor: "pointer", fontWeight: 600 }}>Zobacz wszystkie →</button>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {allReferrals.filter(r => r.status === "pending").slice(0, 4).map(r => (
+                    <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "10px 14px", background: "#091220", borderRadius: 10, flexWrap: "wrap" }}>
+                      <div style={{ flex: 1, minWidth: 120 }}>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: "#e8f0fe" }}>{r.company}</div>
+                        <div style={{ fontSize: 11, color: "#5b7fa6" }}>{r.partnerName} · {r.date}</div>
+                      </div>
+                      <span style={{ padding: "3px 9px", background: "#1c1a08", border: "1px solid #ca8a04", borderRadius: 20, color: "#eab308", fontSize: 11, fontWeight: 700 }}>W toku</span>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button onClick={() => setMarkModal(r)}
+                          style={{ padding: "6px 14px", background: "linear-gradient(135deg,#166534,#22c55e)", border: "none", borderRadius: 7, color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+                          ✓ Realizuj
+                        </button>
+                        <button onClick={() => setAllReferrals(prev => prev.map(x => x.id === r.id ? { ...x, status: "rejected" } : x))}
+                          style={{ padding: "6px 14px", background: "none", border: "1px solid #7f1d1d", borderRadius: 7, color: "#ef4444", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+                          ✗ Odrzuć
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Partners summary */}
+            <div style={{ ...S.card }}>
+              <div style={{ fontWeight: 700, fontSize: 15, color: "#e8f0fe", marginBottom: 16 }}>Top partnerzy</div>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>{["Partner", "Firma", "Poziom", "Polecenia", "Zarobki"].map(h => <th key={h} style={{ ...S.th, textAlign: "left" }}>{h}</th>)}</tr>
+                </thead>
+                <tbody>
+                  {MOCK_ALL_PARTNERS.sort((a,b) => b.earned - a.earned).map((p, i) => (
+                    <tr key={p.id}>
+                      <td style={S.td(i%2)}><span style={{ fontWeight: 700, color: "#e8f0fe" }}>{p.name}</span></td>
+                      <td style={S.td(i%2)}>{p.company}</td>
+                      <td style={S.td(i%2)}><span style={{ padding: "3px 9px", background: "#0a1628", border: `1px solid ${LEVEL_COLOR[p.level] || "#3b9de8"}`, borderRadius: 20, color: LEVEL_COLOR[p.level] || "#3b9de8", fontSize: 11, fontWeight: 700 }}>{p.level}</span></td>
+                      <td style={S.td(i%2)}>{p.referrals}</td>
+                      <td style={{ ...S.td(i%2), color: "#22c55e", fontWeight: 700 }}>{p.earned.toLocaleString("pl")} zł</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+
+        {/* ── REFERRALS TAB ── */}
+        {tab === "referrals" && (
+          <>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, flexWrap: "wrap", gap: 14 }}>
+              <div>
+                <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: 26, fontWeight: 800, margin: "0 0 6px" }}>Wszystkie polecenia</h1>
+                <p style={{ color: "#6b8cad", margin: 0, fontSize: 14 }}>{allReferrals.length} poleceń łącznie</p>
+              </div>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <select value={filterPartner} onChange={e => setFilterPartner(e.target.value)}
+                  style={{ ...S.input, width: "auto", textAlign: "left", padding: "8px 14px" }}>
+                  <option value="all">Wszyscy partnerzy</option>
+                  {MOCK_ALL_PARTNERS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+                {["all","pending","active","rejected"].map(s => (
+                  <button key={s} onClick={() => setFilterStatus(s)} style={S.tabBtn(filterStatus === s)}>
+                    {{ all: "Wszystkie", pending: `Do weryfik. (${totalPending})`, active: "Aktywne", rejected: "Odrzucone" }[s]}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>{["Firma", "Partner", "Produkt", "Data", "Status", "Premia", "Prowizja/mies.", "Akcja"].map(h => <th key={h} style={{ ...S.th, textAlign: "left" }}>{h}</th>)}</tr>
+                </thead>
+                <tbody>
+                  {filteredRefs.map((r, i) => (
+                    <tr key={r.id}>
+                      <td style={S.td(i%2)}><span style={{ fontWeight: 700, color: "#e8f0fe" }}>{r.company}</span></td>
+                      <td style={S.td(i%2)}><span style={{ fontSize: 12, color: "#8aaecb" }}>{r.partnerName}</span></td>
+                      <td style={S.td(i%2)}><span style={{ fontSize: 12, padding: "2px 8px", background: r.product === "Hotel" ? "#1a2f4e" : "#1a2e1a", borderRadius: 5, color: r.product === "Hotel" ? "#60a5fa" : "#4ade80", fontWeight: 600 }}>{r.product}</span></td>
+                      <td style={S.td(i%2)}>{r.date}</td>
+                      <td style={S.td(i%2)}>
+                        {{ active: <span style={{ padding: "3px 9px", background: "#0d2e1a", border: "1px solid #16a34a", borderRadius: 20, color: "#22c55e", fontSize: 11, fontWeight: 700 }}>Aktywny</span>,
+                           pending: <span style={{ padding: "3px 9px", background: "#1c1a08", border: "1px solid #ca8a04", borderRadius: 20, color: "#eab308", fontSize: 11, fontWeight: 700 }}>W toku</span>,
+                           rejected: <span style={{ padding: "3px 9px", background: "#1e0f0f", border: "1px solid #dc2626", borderRadius: 20, color: "#ef4444", fontSize: 11, fontWeight: 700 }}>Odrzucony</span>,
+                        }[r.status]}
+                      </td>
+                      <td style={{ ...S.td(i%2), color: r.commission > 0 ? "#e8f0fe" : "#3a4f6a", fontWeight: 700 }}>{r.commission > 0 ? `${r.commission} zł` : "—"}</td>
+                      <td style={{ ...S.td(i%2), color: r.recurring > 0 ? "#22c55e" : "#3a4f6a", fontWeight: 700 }}>{r.recurring > 0 ? `+${r.recurring} zł` : "—"}</td>
+                      <td style={S.td(i%2)}>
+                        {r.status === "pending" && (
+                          <div style={{ display: "flex", gap: 6 }}>
+                            <button onClick={() => setMarkModal(r)} style={{ padding: "5px 10px", background: "linear-gradient(135deg,#166534,#22c55e)", border: "none", borderRadius: 6, color: "#fff", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>✓ Realizuj</button>
+                            <button onClick={() => setAllReferrals(prev => prev.map(x => x.id === r.id ? { ...x, status: "rejected" } : x))} style={{ padding: "5px 10px", background: "none", border: "1px solid #7f1d1d", borderRadius: 6, color: "#ef4444", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>✗</button>
+                          </div>
+                        )}
+                        {r.status === "active" && <span style={{ color: "#22c55e", fontSize: 12 }}>✓ Zrealizowane</span>}
+                        {r.status === "rejected" && <span style={{ color: "#ef4444", fontSize: 12 }}>✗ Odrzucone</span>}
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredRefs.length === 0 && <tr><td colSpan={8} style={{ padding: "32px", textAlign: "center", color: "#5b7fa6" }}>Brak poleceń</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+
+        {/* ── PARTNERS TAB ── */}
+        {tab === "partners" && (
+          <>
+            <div style={{ marginBottom: 24 }}>
+              <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: 26, fontWeight: 800, margin: "0 0 6px" }}>Partnerzy</h1>
+              <p style={{ color: "#6b8cad", margin: 0, fontSize: 14 }}>{MOCK_ALL_PARTNERS.length} zarejestrowanych partnerów</p>
+            </div>
+            <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>{["Partner", "E-mail", "Firma", "Poziom", "Polecenia", "Zarobki", "Do wypłaty"].map(h => <th key={h} style={{ ...S.th, textAlign: "left" }}>{h}</th>)}</tr>
+                </thead>
+                <tbody>
+                  {MOCK_ALL_PARTNERS.map((p, i) => (
+                    <tr key={p.id}>
+                      <td style={S.td(i%2)}><span style={{ fontWeight: 700, color: "#e8f0fe" }}>{p.name}</span></td>
+                      <td style={S.td(i%2)}><span style={{ fontSize: 12, color: "#6b8cad" }}>{p.email}</span></td>
+                      <td style={S.td(i%2)}>{p.company}</td>
+                      <td style={S.td(i%2)}><span style={{ padding: "3px 9px", background: "#0a1628", border: `1px solid ${LEVEL_COLOR[p.level] || "#3b9de8"}`, borderRadius: 20, color: LEVEL_COLOR[p.level] || "#3b9de8", fontSize: 11, fontWeight: 700 }}>{p.level}</span></td>
+                      <td style={S.td(i%2)}>{p.referrals}</td>
+                      <td style={{ ...S.td(i%2), color: "#22c55e", fontWeight: 700 }}>{p.earned.toLocaleString("pl")} zł</td>
+                      <td style={{ ...S.td(i%2), color: p.pending > 0 ? "#f59e0b" : "#3a4f6a", fontWeight: 700 }}>{p.pending > 0 ? `${p.pending.toLocaleString("pl")} zł` : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+
+        {/* ── RATES TAB ── */}
+        {tab === "rates" && (
+          <>
+            <div style={{ marginBottom: 24 }}>
+              <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: 26, fontWeight: 800, margin: "0 0 6px" }}>Stawki prowizji</h1>
+              <p style={{ color: "#6b8cad", margin: 0, fontSize: 14 }}>Konfiguracja wynagrodzeń per poziom partnerski</p>
+            </div>
+
+            {ratesSaved && (
+              <div style={{ background: "#0d2e1a", border: "1px solid #16a34a", borderRadius: 10, padding: "12px 18px", marginBottom: 20, color: "#22c55e", fontSize: 14, fontWeight: 600 }}>
+                ✓ Stawki zostały zapisane i będą obowiązywać dla nowych realizacji
+              </div>
+            )}
+
+            {[
+              { key: "ambasador", label: "Ambasador", color: "#c084fc", desc: "1–4 polecenia / rok" },
+              { key: "partner",   label: "Partner",   color: "#3b9de8", desc: "5–14 poleceń / rok" },
+              { key: "premium",   label: "Partner Premium", color: "#f59e0b", desc: "15+ poleceń / rok" },
+            ].map(level => {
+              const d = ratesDraft[level.key];
+              const set = (field, val) => setRatesDraft(prev => ({ ...prev, [level.key]: { ...prev[level.key], [field]: val } }));
+              return (
+                <div key={level.key} style={{ ...S.card, marginBottom: 20 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+                    <span style={{ padding: "5px 14px", background: "#0a1628", border: `1px solid ${level.color}`, borderRadius: 20, color: level.color, fontSize: 13, fontWeight: 700 }}>{level.label}</span>
+                    <span style={{ color: "#5b7fa6", fontSize: 13 }}>{level.desc}</span>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 20 }}>
+                    {[
+                      { field: "bonus_gastro",      label: "Premia jednorazowa — Gastro", unit: "zł" },
+                      { field: "bonus_hotel",        label: "Premia jednorazowa — Hotel",  unit: "zł" },
+                      { field: "recurring_pct",      label: "Prowizja cykliczna",           unit: "% abonamentu / mies." },
+                      { field: "recurring_months",   label: "Czas trwania prowizji",        unit: "miesięcy" },
+                      { field: "annual_bonus",       label: "Bonus roczny",                 unit: "zł" },
+                    ].map(f => (
+                      <div key={f.field}>
+                        <label style={{ display: "block", color: "#8aaecb", fontSize: 11, fontWeight: 600, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.06em" }}>{f.label}</label>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <input type="number" value={d[f.field]} onChange={e => set(f.field, parseFloat(e.target.value) || 0)}
+                            style={{ ...S.input, width: 90 }} />
+                          <span style={{ color: "#5b7fa6", fontSize: 13 }}>{f.unit}</span>
+                        </div>
+                        {f.field === "recurring_pct" && d[f.field] > 0 && (
+                          <div style={{ color: "#6b8cad", fontSize: 11, marginTop: 4 }}>
+                            np. abonament 299 zł → {Math.round(299 * d[f.field] / 100)} zł/mies.
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+
+            <div style={{ display: "flex", gap: 12 }}>
+              <button onClick={() => setRatesDraft(DEFAULT_RATES)} style={{ padding: "12px 24px", background: "none", border: "1px solid #1e3a5f", borderRadius: 10, color: "#6b8cad", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>
+                Przywróć domyślne
+              </button>
+              <button onClick={saveRates} style={{ padding: "12px 28px", background: "linear-gradient(135deg,#1e6fb5,#3b9de8)", border: "none", borderRadius: 10, color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>
+                Zapisz stawki →
+              </button>
+            </div>
+
+            {/* Preview table */}
+            <div style={{ ...S.card, marginTop: 28 }}>
+              <div style={{ fontWeight: 700, fontSize: 15, color: "#e8f0fe", marginBottom: 16 }}>Podgląd — przykładowe wynagrodzenia</div>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>{["Poziom", "Gastro — premia", "Hotel — premia", "Prowizja mies.", "Maks. łącznie (Gastro 12 mies.)", "Bonus roczny"].map(h => <th key={h} style={{ ...S.th, textAlign: "left" }}>{h}</th>)}</tr>
+                </thead>
+                <tbody>
+                  {[
+                    { key: "ambasador", label: "Ambasador", color: "#c084fc" },
+                    { key: "partner",   label: "Partner",   color: "#3b9de8" },
+                    { key: "premium",   label: "Partner Premium", color: "#f59e0b" },
+                  ].map((level, i) => {
+                    const r = ratesDraft[level.key];
+                    const monthly = Math.round(299 * r.recurring_pct / 100);
+                    const maxTotal = r.bonus_gastro + monthly * r.recurring_months;
+                    return (
+                      <tr key={level.key}>
+                        <td style={S.td(i%2)}><span style={{ padding: "3px 9px", background: "#0a1628", border: `1px solid ${level.color}`, borderRadius: 20, color: level.color, fontSize: 11, fontWeight: 700 }}>{level.label}</span></td>
+                        <td style={{ ...S.td(i%2), fontWeight: 700 }}>{r.bonus_gastro} zł</td>
+                        <td style={{ ...S.td(i%2), fontWeight: 700 }}>{r.bonus_hotel} zł</td>
+                        <td style={{ ...S.td(i%2), color: monthly > 0 ? "#22c55e" : "#3a4f6a", fontWeight: 700 }}>{monthly > 0 ? `+${monthly} zł` : "—"}</td>
+                        <td style={{ ...S.td(i%2), color: "#f59e0b", fontWeight: 700 }}>{maxTotal > 0 ? `${maxTotal.toLocaleString("pl")} zł` : "—"}</td>
+                        <td style={{ ...S.td(i%2), color: r.annual_bonus > 0 ? "#f59e0b" : "#3a4f6a", fontWeight: 700 }}>{r.annual_bonus > 0 ? `${r.annual_bonus.toLocaleString("pl")} zł` : "—"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+
+        {/* ── PAYOUTS TAB ── */}
+        {tab === "payouts" && (
+          <>
+            <div style={{ marginBottom: 24 }}>
+              <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: 26, fontWeight: 800, margin: "0 0 6px" }}>Rozliczenia</h1>
+              <p style={{ color: "#6b8cad", margin: 0, fontSize: 14 }}>Zestawienie prowizji do wypłaty per partner</p>
+            </div>
+            <div style={{ display: "flex", gap: 16, marginBottom: 24, flexWrap: "wrap" }}>
+              {[
+                { label: "Łącznie do wypłaty", value: `${MOCK_ALL_PARTNERS.reduce((s, p) => s + p.pending, 0).toLocaleString("pl")} zł`, color: "#f59e0b" },
+                { label: "Prowizje cykliczne (mies.)", value: `${totalRecurring.toLocaleString("pl")} zł`, color: "#22c55e" },
+                { label: "Wypłacono łącznie (YTD)", value: `${MOCK_ALL_PARTNERS.reduce((s, p) => s + p.earned - p.pending, 0).toLocaleString("pl")} zł`, color: "#3b9de8" },
+              ].map(c => (
+                <div key={c.label} style={{ ...S.card, flex: 1, minWidth: 180 }}>
+                  <div style={{ color: "#5b7fa6", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>{c.label}</div>
+                  <div style={{ color: c.color, fontSize: 26, fontWeight: 800, fontFamily: "'Sora',sans-serif" }}>{c.value}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>{["Partner", "Poziom", "Prowizje cykliczne", "Premia do wypłaty", "Łącznie do wypłaty", "Akcja"].map(h => <th key={h} style={{ ...S.th, textAlign: "left" }}>{h}</th>)}</tr>
+                </thead>
+                <tbody>
+                  {MOCK_ALL_PARTNERS.map((p, i) => {
+                    const partnerRefs = allReferrals.filter(r => r.partnerId === p.id && r.status === "active");
+                    const monthlySum = partnerRefs.reduce((s, r) => s + r.recurring, 0);
+                    return (
+                      <tr key={p.id}>
+                        <td style={S.td(i%2)}>
+                          <div style={{ fontWeight: 700, color: "#e8f0fe", fontSize: 13 }}>{p.name}</div>
+                          <div style={{ fontSize: 11, color: "#5b7fa6" }}>{p.email}</div>
+                        </td>
+                        <td style={S.td(i%2)}><span style={{ padding: "3px 9px", background: "#0a1628", border: `1px solid ${LEVEL_COLOR[p.level] || "#3b9de8"}`, borderRadius: 20, color: LEVEL_COLOR[p.level] || "#3b9de8", fontSize: 11, fontWeight: 700 }}>{p.level}</span></td>
+                        <td style={{ ...S.td(i%2), color: "#22c55e", fontWeight: 700 }}>{monthlySum > 0 ? `+${monthlySum} zł/mies.` : "—"}</td>
+                        <td style={{ ...S.td(i%2), color: p.pending > 0 ? "#f59e0b" : "#3a4f6a", fontWeight: 700 }}>{p.pending > 0 ? `${p.pending.toLocaleString("pl")} zł` : "—"}</td>
+                        <td style={{ ...S.td(i%2), color: p.pending + monthlySum > 0 ? "#e8f0fe" : "#3a4f6a", fontWeight: 800, fontSize: 15 }}>{p.pending + monthlySum > 0 ? `${(p.pending + monthlySum).toLocaleString("pl")} zł` : "—"}</td>
+                        <td style={S.td(i%2)}>
+                          {p.pending > 0 && (
+                            <button onClick={() => setPayoutModal(p)}
+                              style={{ padding: "6px 14px", background: "linear-gradient(135deg,#1e6fb5,#3b9de8)", border: "none", borderRadius: 7, color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+                              💳 Oznacz wypłatę
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Payout confirm modal */}
+      {payoutModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(6,15,30,0.92)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ background: "#0e1e3a", border: "1px solid #1e3a5f", borderRadius: 16, width: "100%", maxWidth: 420, padding: "36px 40px" }}>
+            <h3 style={{ color: "#e8f0fe", fontFamily: "'Sora',sans-serif", fontSize: 20, fontWeight: 700, margin: "0 0 6px" }}>Oznacz wypłatę</h3>
+            <p style={{ color: "#6b8cad", fontSize: 13, margin: "0 0 20px" }}>Potwierdź wypłatę dla partnera</p>
+            <div style={{ background: "#091220", borderRadius: 10, border: "1px solid #1e3a5f", padding: "14px 16px", marginBottom: 20 }}>
+              <div style={{ fontWeight: 700, color: "#e8f0fe", marginBottom: 4 }}>{payoutModal.name}</div>
+              <div style={{ color: "#6b8cad", fontSize: 13 }}>{payoutModal.email}</div>
+              <div style={{ color: "#f59e0b", fontWeight: 800, fontSize: 22, marginTop: 10, fontFamily: "'Sora',sans-serif" }}>{payoutModal.pending.toLocaleString("pl")} zł</div>
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setPayoutModal(null)} style={{ flex: 1, padding: "11px", background: "none", border: "1px solid #1e3a5f", borderRadius: 9, color: "#6b8cad", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>Anuluj</button>
+              <button onClick={() => { setPayoutModal(null); alert("✓ Wypłata oznaczona jako zrealizowana. W wersji produkcyjnej wysłano by powiadomienie do partnera."); }}
+                style={{ flex: 2, padding: "11px", background: "linear-gradient(135deg,#1e6fb5,#3b9de8)", border: "none", borderRadius: 9, color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
+                ✓ Potwierdź wypłatę
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -316,11 +899,30 @@ export default function App() {
   const [showRegister, setShowRegister] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [partner, setPartner] = useState(MOCK_PARTNER);
+
   const [filterStatus, setFilterStatus] = useState("all");
   const [showAddModal, setShowAddModal] = useState(false);
   const [addForm, setAddForm] = useState({ company: "", contact: "", email: "", phone: "", product: "Gastro", note: "" });
   const [referrals, setReferrals] = useState(MOCK_REFERRALS);
+
+  const handleLogin = (partnerData) => {
+    if (partnerData === "admin") {
+      setIsAdmin(true);
+      setIsLoggedIn(true);
+      return;
+    }
+    if (partnerData === null) {
+      setPartner(MOCK_PARTNER);
+      setReferrals(MOCK_REFERRALS);
+    } else {
+      setPartner(prev => ({ ...prev, ...partnerData }));
+      setReferrals([]);
+    }
+    setIsAdmin(false);
+    setIsLoggedIn(true);
+  };
   const [addSuccess, setAddSuccess] = useState(false);
   const p = partner;
 
@@ -374,11 +976,15 @@ export default function App() {
     setNewNote("");
   };
 
+  if (isAdmin) {
+    return <AdminPanel onLogout={() => { setIsAdmin(false); setIsLoggedIn(false); }} />;
+  }
+
   if (!isLoggedIn) {
     return (
       <>
         {showRegister && <RegisterModal onClose={() => setShowRegister(false)} onRegister={(data) => { setPartner(prev => ({ ...prev, ...data })); setReferrals([]); setIsLoggedIn(true); }} />}
-        {showLogin && <LoginModal onClose={() => setShowLogin(false)} onLogin={() => setIsLoggedIn(true)} />}
+        {showLogin && <LoginModal onClose={() => setShowLogin(false)} onLogin={handleLogin} onShowRegister={() => setShowRegister(true)} />}
         <div style={{ minHeight: "100vh", background: "#060f1e", fontFamily: "'DM Sans', sans-serif", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
           {/* Background grid */}
           <div style={{ position: "fixed", inset: 0, backgroundImage: "linear-gradient(#1e3a5f22 1px, transparent 1px), linear-gradient(90deg, #1e3a5f22 1px, transparent 1px)", backgroundSize: "40px 40px", pointerEvents: "none" }} />

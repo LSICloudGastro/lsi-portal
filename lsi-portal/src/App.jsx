@@ -147,8 +147,14 @@ function RegisterModal({ onClose, onRegister }) {
                   style={{ width: "100%", background: "#0a1628", border: "1px solid #1e3a5f", borderRadius: 8, padding: "10px 14px", color: "#e8f0fe", fontSize: 14, outline: "none", boxSizing: "border-box" }} />
               </div>
             ))}
-            <button onClick={() => setStep(2)} disabled={!form.name || !form.email || !form.company}
-              style={{ width: "100%", padding: "13px", background: form.name && form.email && form.company ? "linear-gradient(135deg,#1e6fb5,#3b9de8)" : "#1e3a5f", border: "none", borderRadius: 10, color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer", marginTop: 8 }}>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", color: "#8aaecb", fontSize: 12, fontWeight: 600, marginBottom: 6, letterSpacing: "0.05em", textTransform: "uppercase" }}>Hasło do konta *</label>
+              <input type="password" placeholder="Min. 6 znaków" value={form.password || ""} onChange={e => handle("password", e.target.value)}
+                style={{ width: "100%", background: "#0a1628", border: "1px solid #1e3a5f", borderRadius: 8, padding: "10px 14px", color: "#e8f0fe", fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+              <div style={{ color: "#3a5070", fontSize: 11, marginTop: 5 }}>Minimum 6 znaków — użyjesz go przy kolejnych logowaniach</div>
+            </div>
+            <button onClick={() => setStep(2)} disabled={!form.name || !form.email || !form.company || !form.password || form.password.length < 6}
+              style={{ width: "100%", padding: "13px", background: (form.name && form.email && form.company && form.password && form.password.length >= 6) ? "linear-gradient(135deg,#1e6fb5,#3b9de8)" : "#1e3a5f", border: "none", borderRadius: 10, color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer", marginTop: 8 }}>
               Dalej →
             </button>
           </>
@@ -161,11 +167,6 @@ function RegisterModal({ onClose, onRegister }) {
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: "block", color: "#8aaecb", fontSize: 12, fontWeight: 600, marginBottom: 6, letterSpacing: "0.05em", textTransform: "uppercase" }}>NIP (opcjonalnie)</label>
               <input type="text" placeholder="000-000-00-00" value={form.nip} onChange={e => handle("nip", e.target.value)}
-                style={{ width: "100%", background: "#0a1628", border: "1px solid #1e3a5f", borderRadius: 8, padding: "10px 14px", color: "#e8f0fe", fontSize: 14, outline: "none", boxSizing: "border-box" }} />
-            </div>
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: "block", color: "#8aaecb", fontSize: 12, fontWeight: 600, marginBottom: 6, letterSpacing: "0.05em", textTransform: "uppercase" }}>Hasło do konta *</label>
-              <input type="password" placeholder="Min. 6 znaków" value={form.password || ""} onChange={e => handle("password", e.target.value)}
                 style={{ width: "100%", background: "#0a1628", border: "1px solid #1e3a5f", borderRadius: 8, padding: "10px 14px", color: "#e8f0fe", fontSize: 14, outline: "none", boxSizing: "border-box" }} />
             </div>
             <div style={{ background: "#091220", border: "1px solid #1e3a5f", borderRadius: 10, padding: 16, marginBottom: 20, fontSize: 13, color: "#6b8cad", lineHeight: 1.7 }}>
@@ -478,7 +479,7 @@ function AdminPanel({ onLogout }) {
           ))}
         </nav>
         <div style={{ padding: "0 14px" }}>
-          <button onClick={onLogout} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 12px", background: "none", border: "none", borderRadius: 9, color: "#5b7fa6", fontSize: 14, cursor: "pointer" }}>← Wyloguj</button>
+          <button onClick={onLogout} onClick={onLogout} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 12px", background: "none", border: "none", borderRadius: 9, color: "#5b7fa6", fontSize: 14, cursor: "pointer" }}>← Wyloguj</button>
         </div>
       </div>
 

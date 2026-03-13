@@ -1,5 +1,44 @@
 import { useState, useEffect, useRef } from "react";
 
+// ─── SUPABASE CONFIG ──────────────────────────────────────────────────────────
+const SUPABASE_URL = "https://rrybeanhgjqwikckcveg.supabase.co";
+const SUPABASE_KEY = "sb_publishable_EAaVbrU-zOfx8mEAJ-cgiQ_iBaHW5jT";
+const SB = {
+  headers: {
+    "apikey": SUPABASE_KEY,
+    "Authorization": "Bearer " + SUPABASE_KEY,
+    "Content-Type": "application/json",
+    "Prefer": "return=representation",
+  },
+  async get(table, query = "") {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}${query}`, { headers: this.headers });
+    if (!r.ok) throw new Error(await r.text());
+    return r.json();
+  },
+  async post(table, body) {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+      method: "POST", headers: this.headers, body: JSON.stringify(body)
+    });
+    if (!r.ok) throw new Error(await r.text());
+    return r.json();
+  },
+  async patch(table, id, body) {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`, {
+      method: "PATCH", headers: { ...this.headers, "Prefer": "return=representation" }, body: JSON.stringify(body)
+    });
+    if (!r.ok) throw new Error(await r.text());
+    return r.json();
+  },
+  async delete(table, id) {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`, {
+      method: "DELETE", headers: this.headers
+    });
+    if (!r.ok) throw new Error(await r.text());
+    return true;
+  }
+};
+
+
 // ─── MOCK DATA ────────────────────────────────────────────────────────────────
 const MOCK_PARTNER = {
   name: "Marek Kowalski",
@@ -91,7 +130,7 @@ function RegisterModal({ onClose, onRegister }) {
     setTimeout(() => { setLoading(false); setStep(3); }, 1800);
   };
 
-  const handleEnterPanel = () => {
+  const handleEnterPanel = async () => {
     const initials = form.name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
     const partnerData = {
       name: form.name,
@@ -109,12 +148,37 @@ function RegisterModal({ onClose, onRegister }) {
       annualReferrals: 0,
       annualTarget: 5,
     };
-    // Save account to localStorage
-    const accounts = JSON.parse(localStorage.getItem("lsi_accounts") || "[]");
-    const existing = accounts.findIndex(a => a.email.toLowerCase() === form.email.toLowerCase());
-    const accountEntry = { ...partnerData, password: form.password || form.nip || "lsicloud" };
-    if (existing >= 0) { accounts[existing] = accountEntry; } else { accounts.push(accountEntry); }
-    localStorage.setItem("lsi_accounts", JSON.stringify(accounts));
+
+    // Save to Supabase
+    try {
+      await SB.post("partners", {
+        name: form.name,
+        email: form.email,
+        password: form.password || "lsicloud",
+        company: form.company,
+        phone: form.phone,
+        nip: form.nip,
+        ref_code: code,
+        ref_link: "https://lsi-cloud.pl/?ref=" + code,
+        level: "Ambasador",
+        level_num: 1,
+        join_date: new Date().toISOString().slice(0, 10),
+        total_earned: 0,
+        pending_payout: 0,
+        annual_referrals: 0,
+        annual_target: 5,
+        avatar: initials || "??",
+      });
+    } catch(e) {
+      console.error("Supabase register error:", e);
+      // Fallback to localStorage
+      const accounts = JSON.parse(localStorage.getItem("lsi_accounts") || "[]");
+      const existing = accounts.findIndex(a => a.email.toLowerCase() === form.email.toLowerCase());
+      const accountEntry = { ...partnerData, password: form.password || "lsicloud" };
+      if (existing >= 0) { accounts[existing] = accountEntry; } else { accounts.push(accountEntry); }
+      localStorage.setItem("lsi_accounts", JSON.stringify(accounts));
+    }
+
     onRegister(partnerData);
     onClose();
   };
@@ -269,25 +333,63 @@ function LoginModal({ onClose, onLogin, onShowRegister }) {
     if (!email || !password) { setError("Wypełnij oba pola."); return; }
     setLoading(true);
     setError("");
-    setTimeout(() => {
+    // Admin check immediately
+    if (email.toLowerCase() === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
       setLoading(false);
-      // Admin check
-      if (email.toLowerCase() === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
-        onLogin("admin");
-        onClose();
-        return;
-      }
-      // Check localStorage accounts
-      const accounts = JSON.parse(localStorage.getItem("lsi_accounts") || "[]");
-      const found = accounts.find(a => a.email.toLowerCase() === email.toLowerCase() && a.password === password);
-      if (found) {
-        const { password: _pw, ...partnerData } = found;
-        onLogin(partnerData);
-        onClose();
-      } else {
-        setError("Nieprawidłowy e-mail lub hasło. Sprawdź dane lub zarejestruj się.");
-      }
-    }, 900);
+      onLogin("admin");
+      onClose();
+      return;
+    }
+    // Check Supabase
+    SB.get("partners", `?email=eq.${encodeURIComponent(email.toLowerCase())}&password=eq.${encodeURIComponent(password)}&limit=1`)
+      .then(rows => {
+        setLoading(false);
+        if (rows && rows.length > 0) {
+          const row = rows[0];
+          onLogin({
+            name: row.name,
+            email: row.email,
+            company: row.company,
+            avatar: row.avatar || "??",
+            refCode: row.ref_code,
+            refLink: row.ref_link,
+            level: row.level,
+            levelNum: row.level_num,
+            joinDate: row.join_date,
+            totalEarned: row.total_earned,
+            pendingPayout: row.pending_payout,
+            nextPayout: "—",
+            annualReferrals: row.annual_referrals,
+            annualTarget: row.annual_target,
+            dbId: row.id,
+          });
+          onClose();
+        } else {
+          // Fallback: check localStorage
+          const accounts = JSON.parse(localStorage.getItem("lsi_accounts") || "[]");
+          const found = accounts.find(a => a.email.toLowerCase() === email.toLowerCase() && a.password === password);
+          if (found) {
+            const { password: _pw, ...partnerData } = found;
+            onLogin(partnerData);
+            onClose();
+          } else {
+            setError("Nieprawidłowy e-mail lub hasło. Sprawdź dane lub zarejestruj się.");
+          }
+        }
+      })
+      .catch(() => {
+        setLoading(false);
+        // Fallback to localStorage on network error
+        const accounts = JSON.parse(localStorage.getItem("lsi_accounts") || "[]");
+        const found = accounts.find(a => a.email.toLowerCase() === email.toLowerCase() && a.password === password);
+        if (found) {
+          const { password: _pw, ...partnerData } = found;
+          onLogin(partnerData);
+          onClose();
+        } else {
+          setError("Nieprawidłowy e-mail lub hasło. Sprawdź dane lub zarejestruj się.");
+        }
+      });
   };
 
   const loginDemo = () => {
@@ -373,7 +475,7 @@ const DEFAULT_RATES = {
 };
 
 // ─── MOCK ALL-PARTNERS DATA (for admin view) ─────────────────────────────────
-const MOCK_ALL_PARTNERS = [
+const allPartners = [
   { id: 1, name: "Marek Kowalski",    email: "marek.kowalski@restauracja.pl", company: "Restauracja Pod Lipą", level: "Partner",         referrals: 9,  earned: 4820, pending: 1140 },
   { id: 2, name: "Anna Wiśniewska",   email: "anna@hotelik.pl",               company: "Hotelik u Anny",       level: "Ambasador",       referrals: 3,  earned: 900,  pending: 300  },
   { id: 3, name: "Piotr Kowalczyk",   email: "piotr@gastronet.pl",            company: "GastroNet Sp. z o.o.", level: "Partner Premium", referrals: 18, earned: 12400, pending: 2800 },
@@ -401,11 +503,63 @@ function AdminPanel({ onLogout }) {
   });
   const [ratesDraft, setRatesDraft] = useState(rates);
   const [ratesSaved, setRatesSaved] = useState(false);
-  const [allReferrals, setAllReferrals] = useState(MOCK_ALL_REFERRALS);
+  const [allReferrals, setAllReferrals] = useState([]);
+  const [allPartners, setAllPartners] = useState([]);
   const [filterPartner, setFilterPartner] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
-  const [markModal, setMarkModal] = useState(null); // referral to mark as realized
-  const [payoutModal, setPayoutModal] = useState(null); // partner to pay out
+  const [markModal, setMarkModal] = useState(null);
+  const [payoutModal, setPayoutModal] = useState(null);
+  const [loadingData, setLoadingData] = useState(true);
+
+  useEffect(() => {
+    const loadData = async () => {
+      setLoadingData(true);
+      try {
+        const [partners, referrals] = await Promise.all([
+          SB.get("partners", "?order=created_at.desc"),
+          SB.get("referrals", "?order=created_at.desc"),
+        ]);
+        setAllPartners(partners.map(p => ({
+          id: p.id,
+          email: p.email,
+          name: p.name,
+          company: p.company,
+          level: p.level,
+          referrals: referrals.filter(r => r.partner_email === p.email).length,
+          earned: p.total_earned || 0,
+          pending: p.pending_payout || 0,
+        })));
+        setAllReferrals(referrals.map(r => ({
+          id: r.id,
+          partnerId: r.partner_email,
+          partnerName: r.partner_name,
+          partnerCompany: r.partner_company,
+          company: r.company,
+          contact: r.contact,
+          email: r.email,
+          phone: r.phone,
+          product: r.product,
+          status: r.status,
+          date: r.date,
+          commission: r.commission || 0,
+          recurring: r.recurring || 0,
+          months: r.months || 0,
+          subscriptionValue: r.subscription_value || 0,
+          notes: r.notes || [],
+          dbId: r.id,
+        })));
+      } catch(e) {
+        console.error("Supabase load error:", e);
+        // Fallback to localStorage
+        try {
+          setAllPartners(JSON.parse(localStorage.getItem("lsi_all_partners") || "[]"));
+          setAllReferrals(JSON.parse(localStorage.getItem("lsi_all_referrals") || "[]"));
+        } catch {}
+      }
+      setLoadingData(false);
+    };
+    loadData();
+  }, []);
 
   const saveRates = () => {
     setRates(ratesDraft);
@@ -415,15 +569,22 @@ function AdminPanel({ onLogout }) {
   };
 
   const markRealized = (ref) => {
-    const partner = MOCK_ALL_PARTNERS.find(p => p.id === ref.partnerId);
-    const level = partner?.level?.toLowerCase().replace(" ", "_").replace("partner_premium", "premium").replace("partner", "partner") || "ambasador";
+    const partner = allPartners.find(p => p.email === ref.partnerId || p.id === ref.partnerId);
+    const level = (partner?.level || "ambasador").toLowerCase();
     const levelKey = level.includes("premium") ? "premium" : level.includes("partner") ? "partner" : "ambasador";
     const r = rates[levelKey];
     const bonus = ref.product === "Hotel" ? r.bonus_hotel : r.bonus_gastro;
     const recurringMonthly = ref.subscriptionValue > 0 ? Math.round(ref.subscriptionValue * r.recurring_pct / 100) : 0;
 
+    const updatedRef = { status: "active", commission: bonus, recurring: recurringMonthly, months: r.recurring_months, subscription_value: ref.subscriptionValue || 299 };
+
+    // Update in Supabase
+    if (ref.dbId) {
+      SB.patch("referrals", ref.dbId, updatedRef).catch(e => console.error("Supabase patch error:", e));
+    }
+
     setAllReferrals(prev => prev.map(item => item.id === ref.id
-      ? { ...item, status: "active", commission: bonus, recurring: recurringMonthly, months: r.recurring_months, subscriptionValue: item.subscriptionValue || 299 }
+      ? { ...item, status: "active", commission: bonus, recurring: recurringMonthly, months: r.recurring_months, subscriptionValue: ref.subscriptionValue || 299 }
       : item
     ));
     setMarkModal(null);
@@ -435,7 +596,7 @@ function AdminPanel({ onLogout }) {
   const totalRecurring = allReferrals.filter(r => r.status === "active").reduce((s, r) => s + r.recurring, 0);
 
   const filteredRefs = allReferrals
-    .filter(r => filterPartner === "all" || r.partnerId === parseInt(filterPartner))
+    .filter(r => filterPartner === "all" || r.partnerId === filterPartner)
     .filter(r => filterStatus === "all" || r.status === filterStatus);
 
   const LEVEL_COLOR = { "Ambasador": "#c084fc", "Partner": "#3b9de8", "Partner Premium": "#f59e0b" };
@@ -488,7 +649,7 @@ function AdminPanel({ onLogout }) {
 
         {/* ── MARK AS REALIZED MODAL ── */}
         {markModal && (() => {
-          const partner = MOCK_ALL_PARTNERS.find(p => p.id === markModal.partnerId);
+          const partner = allPartners.find(p => p.email === markModal.partnerId || p.id === markModal.partnerId);
           const levelKey = (partner?.level || "").includes("Premium") ? "premium" : (partner?.level || "").includes("Partner") ? "partner" : "ambasador";
           const r = rates[levelKey];
           const bonus = markModal.product === "Hotel" ? r.bonus_hotel : r.bonus_gastro;
@@ -548,8 +709,17 @@ function AdminPanel({ onLogout }) {
           );
         })()}
 
+        {/* ── LOADING ── */}
+        {loadingData && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 300, flexDirection: "column", gap: 16 }}>
+            <div style={{ width: 40, height: 40, border: "3px solid #1e3a5f", borderTopColor: "#3b9de8", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+            <div style={{ color: "#5b7fa6", fontSize: 14 }}>Ładowanie danych z bazy…</div>
+            <style>{"@keyframes spin { to { transform: rotate(360deg); } }"}</style>
+          </div>
+        )}
+
         {/* ── OVERVIEW TAB ── */}
-        {tab === "overview" && (
+        {!loadingData && tab === "overview" && (
           <>
             <div style={{ marginBottom: 32 }}>
               <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: 26, fontWeight: 800, margin: "0 0 6px" }}>Panel administratora</h1>
@@ -557,7 +727,7 @@ function AdminPanel({ onLogout }) {
             </div>
             <div style={{ display: "flex", gap: 16, marginBottom: 28, flexWrap: "wrap" }}>
               {[
-                { label: "Aktywni partnerzy",    value: MOCK_ALL_PARTNERS.length, sub: "zarejestrowanych",        color: "#3b9de8",  icon: "👥" },
+                { label: "Aktywni partnerzy",    value: allPartners.length, sub: "zarejestrowanych",        color: "#3b9de8",  icon: "👥" },
                 { label: "Polecenia do weryfik.", value: totalPending,             sub: "oczekują na decyzję",     color: "#ef4444",  icon: "⏳" },
                 { label: "Aktywne kontrakty",     value: totalActive,             sub: "przynosi prowizję",       color: "#22c55e",  icon: "✅" },
                 { label: "Prowizje miesięczne",   value: `${totalRecurring} zł`,  sub: "łącznie do wypłaty/mies.", color: "#f59e0b",  icon: "💰" },
@@ -574,6 +744,13 @@ function AdminPanel({ onLogout }) {
             </div>
 
             {/* Pending referrals quick action */}
+            {allPartners.length === 0 && (
+              <div style={{ background: "#0e1e3a", border: "1px solid #1e3a5f", borderRadius: 14, padding: "40px 24px", marginBottom: 24, textAlign: "center" }}>
+                <div style={{ fontSize: 36, marginBottom: 12 }}>👥</div>
+                <div style={{ fontWeight: 700, fontSize: 16, color: "#5b7fa6", marginBottom: 8 }}>Brak zarejestrowanych partnerów</div>
+                <div style={{ color: "#3a4f6a", fontSize: 13 }}>Partnerzy pojawią się tutaj po rejestracji w portalu</div>
+              </div>
+            )}
             {totalPending > 0 && (
               <div style={{ ...S.card, marginBottom: 24 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
@@ -593,7 +770,10 @@ function AdminPanel({ onLogout }) {
                           style={{ padding: "6px 14px", background: "linear-gradient(135deg,#166534,#22c55e)", border: "none", borderRadius: 7, color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
                           ✓ Realizuj
                         </button>
-                        <button onClick={() => setAllReferrals(prev => prev.map(x => x.id === r.id ? { ...x, status: "rejected" } : x))}
+                        <button onClick={() => {
+                          if (r.dbId) SB.patch("referrals", r.dbId, { status: "rejected" }).catch(console.error);
+                          setAllReferrals(prev => prev.map(x => x.id === r.id ? { ...x, status: "rejected" } : x));
+                        }}
                           style={{ padding: "6px 14px", background: "none", border: "1px solid #7f1d1d", borderRadius: 7, color: "#ef4444", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
                           ✗ Odrzuć
                         </button>
@@ -612,7 +792,7 @@ function AdminPanel({ onLogout }) {
                   <tr>{["Partner", "Firma", "Poziom", "Polecenia", "Zarobki"].map(h => <th key={h} style={{ ...S.th, textAlign: "left" }}>{h}</th>)}</tr>
                 </thead>
                 <tbody>
-                  {MOCK_ALL_PARTNERS.sort((a,b) => b.earned - a.earned).map((p, i) => (
+                  {allPartners.sort((a,b) => b.earned - a.earned).map((p, i) => (
                     <tr key={p.id}>
                       <td style={S.td(i%2)}><span style={{ fontWeight: 700, color: "#e8f0fe" }}>{p.name}</span></td>
                       <td style={S.td(i%2)}>{p.company}</td>
@@ -628,7 +808,7 @@ function AdminPanel({ onLogout }) {
         )}
 
         {/* ── REFERRALS TAB ── */}
-        {tab === "referrals" && (
+        {!loadingData && tab === "referrals" && (
           <>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, flexWrap: "wrap", gap: 14 }}>
               <div>
@@ -639,7 +819,7 @@ function AdminPanel({ onLogout }) {
                 <select value={filterPartner} onChange={e => setFilterPartner(e.target.value)}
                   style={{ ...S.input, width: "auto", textAlign: "left", padding: "8px 14px" }}>
                   <option value="all">Wszyscy partnerzy</option>
-                  {MOCK_ALL_PARTNERS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  {allPartners.map((p, i) => <option key={i} value={p.email}>{p.name}</option>)}
                 </select>
                 {["all","pending","active","rejected"].map(s => (
                   <button key={s} onClick={() => setFilterStatus(s)} style={S.tabBtn(filterStatus === s)}>
@@ -672,7 +852,10 @@ function AdminPanel({ onLogout }) {
                         {r.status === "pending" && (
                           <div style={{ display: "flex", gap: 6 }}>
                             <button onClick={() => setMarkModal(r)} style={{ padding: "5px 10px", background: "linear-gradient(135deg,#166534,#22c55e)", border: "none", borderRadius: 6, color: "#fff", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>✓ Realizuj</button>
-                            <button onClick={() => setAllReferrals(prev => prev.map(x => x.id === r.id ? { ...x, status: "rejected" } : x))} style={{ padding: "5px 10px", background: "none", border: "1px solid #7f1d1d", borderRadius: 6, color: "#ef4444", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>✗</button>
+                            <button onClick={() => {
+                          if (r.dbId) SB.patch("referrals", r.dbId, { status: "rejected" }).catch(console.error);
+                          setAllReferrals(prev => prev.map(x => x.id === r.id ? { ...x, status: "rejected" } : x));
+                        }} style={{ padding: "5px 10px", background: "none", border: "1px solid #7f1d1d", borderRadius: 6, color: "#ef4444", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>✗</button>
                           </div>
                         )}
                         {r.status === "active" && <span style={{ color: "#22c55e", fontSize: 12 }}>✓ Zrealizowane</span>}
@@ -688,11 +871,11 @@ function AdminPanel({ onLogout }) {
         )}
 
         {/* ── PARTNERS TAB ── */}
-        {tab === "partners" && (
+        {!loadingData && tab === "partners" && (
           <>
             <div style={{ marginBottom: 24 }}>
               <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: 26, fontWeight: 800, margin: "0 0 6px" }}>Partnerzy</h1>
-              <p style={{ color: "#6b8cad", margin: 0, fontSize: 14 }}>{MOCK_ALL_PARTNERS.length} zarejestrowanych partnerów</p>
+              <p style={{ color: "#6b8cad", margin: 0, fontSize: 14 }}>{allPartners.length} zarejestrowanych partnerów</p>
             </div>
             <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -700,7 +883,7 @@ function AdminPanel({ onLogout }) {
                   <tr>{["Partner", "E-mail", "Firma", "Poziom", "Polecenia", "Zarobki", "Do wypłaty"].map(h => <th key={h} style={{ ...S.th, textAlign: "left" }}>{h}</th>)}</tr>
                 </thead>
                 <tbody>
-                  {MOCK_ALL_PARTNERS.map((p, i) => (
+                  {allPartners.map((p, i) => (
                     <tr key={p.id}>
                       <td style={S.td(i%2)}><span style={{ fontWeight: 700, color: "#e8f0fe" }}>{p.name}</span></td>
                       <td style={S.td(i%2)}><span style={{ fontSize: 12, color: "#6b8cad" }}>{p.email}</span></td>
@@ -718,7 +901,7 @@ function AdminPanel({ onLogout }) {
         )}
 
         {/* ── RATES TAB ── */}
-        {tab === "rates" && (
+        {!loadingData && tab === "rates" && (
           <>
             <div style={{ marginBottom: 24 }}>
               <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: 26, fontWeight: 800, margin: "0 0 6px" }}>Stawki prowizji</h1>
@@ -814,7 +997,7 @@ function AdminPanel({ onLogout }) {
         )}
 
         {/* ── PAYOUTS TAB ── */}
-        {tab === "payouts" && (
+        {!loadingData && tab === "payouts" && (
           <>
             <div style={{ marginBottom: 24 }}>
               <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: 26, fontWeight: 800, margin: "0 0 6px" }}>Rozliczenia</h1>
@@ -822,9 +1005,9 @@ function AdminPanel({ onLogout }) {
             </div>
             <div style={{ display: "flex", gap: 16, marginBottom: 24, flexWrap: "wrap" }}>
               {[
-                { label: "Łącznie do wypłaty", value: `${MOCK_ALL_PARTNERS.reduce((s, p) => s + p.pending, 0).toLocaleString("pl")} zł`, color: "#f59e0b" },
+                { label: "Łącznie do wypłaty", value: `${allPartners.reduce((s, p) => s + p.pending, 0).toLocaleString("pl")} zł`, color: "#f59e0b" },
                 { label: "Prowizje cykliczne (mies.)", value: `${totalRecurring.toLocaleString("pl")} zł`, color: "#22c55e" },
-                { label: "Wypłacono łącznie (YTD)", value: `${MOCK_ALL_PARTNERS.reduce((s, p) => s + p.earned - p.pending, 0).toLocaleString("pl")} zł`, color: "#3b9de8" },
+                { label: "Wypłacono łącznie (YTD)", value: `${allPartners.reduce((s, p) => s + p.earned - p.pending, 0).toLocaleString("pl")} zł`, color: "#3b9de8" },
               ].map(c => (
                 <div key={c.label} style={{ ...S.card, flex: 1, minWidth: 180 }}>
                   <div style={{ color: "#5b7fa6", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>{c.label}</div>
@@ -838,8 +1021,8 @@ function AdminPanel({ onLogout }) {
                   <tr>{["Partner", "Poziom", "Prowizje cykliczne", "Premia do wypłaty", "Łącznie do wypłaty", "Akcja"].map(h => <th key={h} style={{ ...S.th, textAlign: "left" }}>{h}</th>)}</tr>
                 </thead>
                 <tbody>
-                  {MOCK_ALL_PARTNERS.map((p, i) => {
-                    const partnerRefs = allReferrals.filter(r => r.partnerId === p.id && r.status === "active");
+                  {allPartners.map((p, i) => {
+                    const partnerRefs = allReferrals.filter(r => (r.partnerId === p.email || r.partnerId === p.id) && r.status === "active");
                     const monthlySum = partnerRefs.reduce((s, r) => s + r.recurring, 0);
                     return (
                       <tr key={p.id}>
@@ -921,10 +1104,32 @@ export default function App() {
       setReferrals(MOCK_REFERRALS);
       setPayouts(MOCK_PAYOUTS);
     } else {
-      // Real account — start fresh
+      // Real account — load from Supabase
       setPartner(prev => ({ ...prev, ...partnerData }));
-      setReferrals([]);
       setPayouts([]);
+      // Load this partner's referrals from Supabase
+      SB.get("referrals", `?partner_email=eq.${encodeURIComponent(partnerData.email)}&order=created_at.desc`)
+        .then(rows => {
+          setReferrals(rows.map((r, i) => ({
+            id: r.id || i + 1,
+            dbId: r.id,
+            company: r.company,
+            contact: r.contact,
+            email: r.email || "",
+            phone: r.phone || "",
+            product: r.product,
+            status: r.status,
+            date: r.date,
+            commission: r.commission || 0,
+            recurring: r.recurring || 0,
+            months: r.months || 0,
+            notes: r.notes || [],
+          })));
+        })
+        .catch(e => {
+          console.error("Supabase load referrals error:", e);
+          setReferrals([]);
+        });
     }
     setIsAdmin(false);
     setIsLoggedIn(true);
@@ -958,6 +1163,41 @@ export default function App() {
       notes: addForm.note ? [{ date: today, text: addForm.note }] : [],
     };
     setReferrals(prev => [newRef, ...prev]);
+
+    // Save to Supabase
+    SB.post("referrals", {
+      partner_id: p.dbId || null,
+      partner_email: p.email,
+      partner_name: p.name,
+      partner_company: p.company,
+      partner_code: p.refCode,
+      company: newRef.company,
+      contact: newRef.contact,
+      email: newRef.email,
+      phone: newRef.phone,
+      product: newRef.product,
+      status: "pending",
+      date: today,
+      commission: 0,
+      recurring: 0,
+      months: 0,
+      subscription_value: 0,
+      notes: newRef.notes,
+    }).then(rows => {
+      // Store Supabase id locally for future updates
+      if (rows && rows[0]) {
+        setReferrals(prev => prev.map(r =>
+          r.id === newRef.id ? { ...r, dbId: rows[0].id } : r
+        ));
+      }
+    }).catch(e => {
+      console.error("Supabase referral save error:", e);
+      // Fallback localStorage
+      const allRefs = JSON.parse(localStorage.getItem("lsi_all_referrals") || "[]");
+      allRefs.push({ ...newRef, partnerId: p.email, partnerName: p.name, partnerCompany: p.company, partnerCode: p.refCode });
+      localStorage.setItem("lsi_all_referrals", JSON.stringify(allRefs));
+    });
+
     setAddSuccess(true);
     setEmailStatus("sending");
 

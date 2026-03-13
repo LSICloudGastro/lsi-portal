@@ -39,6 +39,19 @@ const SB = {
 };
 
 
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+function generateRefNumber(existingRefs) {
+  const now = new Date();
+  const ym = now.getFullYear().toString() + String(now.getMonth() + 1).padStart(2, "0");
+  const seq = (existingRefs.length + 1).toString().padStart(4, "0");
+  return `LSI-${ym}-${seq}`;
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return "—";
+  return new Date(dateStr).toLocaleDateString("pl-PL");
+}
+
 // ─── MOCK DATA ────────────────────────────────────────────────────────────────
 const MOCK_PARTNER = {
   name: "Marek Kowalski",
@@ -463,6 +476,338 @@ function LoginModal({ onClose, onLogin, onShowRegister }) {
 }
 
 
+
+// ─── RAPORT POLECEŃ ───────────────────────────────────────────────────────────
+function ReportReferrals({ allReferrals, allPartners, onJumpToRef }) {
+  const [search, setSearch]         = React.useState("");
+  const [fPartner, setFPartner]     = React.useState("all");
+  const [fStatus, setFStatus]       = React.useState("all");
+  const [fDateFrom, setFDateFrom]   = React.useState("");
+  const [fDateTo, setFDateTo]       = React.useState("");
+  const [highlighted, setHighlighted] = React.useState(null);
+
+  const filtered = allReferrals.filter(r => {
+    if (fPartner !== "all" && r.partnerId !== fPartner) return false;
+    if (fStatus  !== "all" && r.status    !== fStatus)  return false;
+    if (fDateFrom && r.date < fDateFrom) return false;
+    if (fDateTo   && r.date > fDateTo)   return false;
+    if (search) {
+      const q = search.toLowerCase();
+      return (r.refNumber||"").toLowerCase().includes(q)
+          || (r.company||"").toLowerCase().includes(q)
+          || (r.contact||"").toLowerCase().includes(q)
+          || (r.partnerName||"").toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  const STATUS_LABEL = { pending: "W toku", active: "Aktywny", rejected: "Odrzucony" };
+  const STATUS_COLOR = { pending: "#eab308", active: "#22c55e", rejected: "#ef4444" };
+  const STATUS_BG    = { pending: "#1c1a08", active: "#0d2e1a", rejected: "#1e0f0f" };
+  const STATUS_BORDER= { pending: "#ca8a04", active: "#16a34a", rejected: "#dc2626" };
+
+  const S = {
+    th: { color: "#5b7fa6", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", padding: "10px 14px", background: "#091220", whiteSpace: "nowrap" },
+    td: (i) => ({ padding: "11px 14px", borderBottom: "1px solid #0e1e3a", background: i%2 ? "#080f1e" : "#0b1628", fontSize: 13, color: "#c8d8e8", verticalAlign: "middle" }),
+    input: { background: "#0a1628", border: "1px solid #1e3a5f", borderRadius: 7, padding: "8px 12px", color: "#e8f0fe", fontSize: 13 },
+    select: { background: "#0a1628", border: "1px solid #1e3a5f", borderRadius: 7, padding: "8px 12px", color: "#e8f0fe", fontSize: 13 },
+  };
+
+  return (
+    <>
+      <div style={{ marginBottom: 24 }}>
+        <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: 26, fontWeight: 800, margin: "0 0 6px", color: "#e8f0fe" }}>Raport poleceń</h1>
+        <p style={{ color: "#6b8cad", margin: 0, fontSize: 14 }}>{filtered.length} poleceń spełnia kryteria</p>
+      </div>
+
+      {/* Filters */}
+      <div style={{ background: "#0e1e3a", border: "1px solid #1e3a5f", borderRadius: 14, padding: "20px 24px", marginBottom: 20 }}>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+          {/* Search by number or name */}
+          <div style={{ flex: "2 1 200px" }}>
+            <label style={{ display: "block", color: "#5b7fa6", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Szukaj (nr / firma / partner)</label>
+            <input placeholder="np. LSI-202603-0001 lub Pizza..." value={search} onChange={e => setSearch(e.target.value)}
+              style={{ ...S.input, width: "100%", boxSizing: "border-box" }} />
+          </div>
+          {/* Partner */}
+          <div style={{ flex: "1 1 160px" }}>
+            <label style={{ display: "block", color: "#5b7fa6", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Partner</label>
+            <select value={fPartner} onChange={e => setFPartner(e.target.value)} style={{ ...S.select, width: "100%" }}>
+              <option value="all">Wszyscy</option>
+              {allPartners.map((p,i) => <option key={i} value={p.email}>{p.name}</option>)}
+            </select>
+          </div>
+          {/* Status */}
+          <div style={{ flex: "1 1 130px" }}>
+            <label style={{ display: "block", color: "#5b7fa6", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Status</label>
+            <select value={fStatus} onChange={e => setFStatus(e.target.value)} style={{ ...S.select, width: "100%" }}>
+              <option value="all">Wszystkie</option>
+              <option value="pending">W toku</option>
+              <option value="active">Aktywne</option>
+              <option value="rejected">Odrzucone</option>
+            </select>
+          </div>
+          {/* Date from */}
+          <div style={{ flex: "1 1 140px" }}>
+            <label style={{ display: "block", color: "#5b7fa6", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Data od</label>
+            <input type="date" value={fDateFrom} onChange={e => setFDateFrom(e.target.value)}
+              style={{ ...S.input, width: "100%", boxSizing: "border-box", colorScheme: "dark" }} />
+          </div>
+          {/* Date to */}
+          <div style={{ flex: "1 1 140px" }}>
+            <label style={{ display: "block", color: "#5b7fa6", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Data do</label>
+            <input type="date" value={fDateTo} onChange={e => setFDateTo(e.target.value)}
+              style={{ ...S.input, width: "100%", boxSizing: "border-box", colorScheme: "dark" }} />
+          </div>
+          {/* Reset */}
+          <button onClick={() => { setSearch(""); setFPartner("all"); setFStatus("all"); setFDateFrom(""); setFDateTo(""); }}
+            style={{ padding: "8px 16px", background: "none", border: "1px solid #1e3a5f", borderRadius: 7, color: "#5b7fa6", fontSize: 13, cursor: "pointer", alignSelf: "flex-end" }}>
+            Wyczyść
+          </button>
+        </div>
+      </div>
+
+      {/* Summary pills */}
+      <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
+        {[
+          { label: "Łącznie", val: filtered.length, color: "#3b9de8" },
+          { label: "W toku",  val: filtered.filter(r=>r.status==="pending").length,  color: "#eab308" },
+          { label: "Aktywne", val: filtered.filter(r=>r.status==="active").length,   color: "#22c55e" },
+          { label: "Odrzucone", val: filtered.filter(r=>r.status==="rejected").length, color: "#ef4444" },
+        ].map(c => (
+          <div key={c.label} style={{ background: "#0e1e3a", border: `1px solid ${c.color}33`, borderRadius: 10, padding: "10px 18px", display: "flex", gap: 10, alignItems: "center" }}>
+            <span style={{ color: "#5b7fa6", fontSize: 12 }}>{c.label}:</span>
+            <span style={{ color: c.color, fontWeight: 800, fontSize: 18, fontFamily: "'Sora',sans-serif" }}>{c.val}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Table */}
+      <div style={{ background: "#0e1e3a", border: "1px solid #1e3a5f", borderRadius: 14, overflow: "hidden" }}>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 860 }}>
+            <thead>
+              <tr>
+                {["Nr polecenia","Data","Klient","Kontakt","Partner","Produkt","Status"].map(h =>
+                  <th key={h} style={{ ...S.th, textAlign: "left" }}>{h}</th>
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 && (
+                <tr><td colSpan={7} style={{ padding: "40px", textAlign: "center", color: "#3a4f6a" }}>Brak poleceń spełniających kryteria</td></tr>
+              )}
+              {filtered.map((r, i) => (
+                <tr key={r.id}
+                  style={{ cursor: "pointer", outline: highlighted === r.id ? "2px solid #3b9de8" : "none" }}
+                  onClick={() => setHighlighted(highlighted === r.id ? null : r.id)}>
+                  <td style={S.td(i)}>
+                    <span style={{ fontFamily: "monospace", color: "#3b9de8", fontWeight: 700, fontSize: 12,
+                      background: "#0a1628", border: "1px solid #1e3a5f", borderRadius: 5, padding: "3px 8px" }}>
+                      {r.refNumber || "—"}
+                    </span>
+                  </td>
+                  <td style={S.td(i)}>{formatDate(r.date)}</td>
+                  <td style={{ ...S.td(i), fontWeight: 700, color: "#e8f0fe" }}>{r.company}</td>
+                  <td style={{ ...S.td(i), color: "#8aaecb" }}>{r.contact || "—"}</td>
+                  <td style={S.td(i)}>{r.partnerName}</td>
+                  <td style={S.td(i)}>
+                    <span style={{ padding: "2px 8px", background: r.product==="Hotel" ? "#1a2f4e" : "#1a2e1a",
+                      borderRadius: 5, color: r.product==="Hotel" ? "#60a5fa" : "#4ade80", fontSize: 11, fontWeight: 700 }}>
+                      {r.product}
+                    </span>
+                  </td>
+                  <td style={S.td(i)}>
+                    <span style={{ padding: "3px 9px", background: STATUS_BG[r.status]||"#0a1628",
+                      border: `1px solid ${STATUS_BORDER[r.status]||"#1e3a5f"}`,
+                      borderRadius: 20, color: STATUS_COLOR[r.status]||"#e8f0fe", fontSize: 11, fontWeight: 700 }}>
+                      {STATUS_LABEL[r.status]||r.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {filtered.length > 0 && (
+          <div style={{ padding: "12px 20px", borderTop: "1px solid #1e3a5f", color: "#5b7fa6", fontSize: 12 }}>
+            Kliknij wiersz aby wyróżnić · Wyniki: {filtered.length} poleceń
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+// ─── RAPORT WYNAGRODZEŃ ───────────────────────────────────────────────────────
+function ReportSalary({ allReferrals, allPartners }) {
+  const [fPartner,  setFPartner]  = React.useState("all");
+  const [fDateFrom, setFDateFrom] = React.useState("");
+  const [fDateTo,   setFDateTo]   = React.useState("");
+  const [fStatus,   setFStatus]   = React.useState("all");
+  const [highlighted, setHighlighted] = React.useState(null);
+
+  const filtered = allReferrals.filter(r => {
+    if (fPartner !== "all" && r.partnerId !== fPartner) return false;
+    if (fDateFrom && r.date < fDateFrom) return false;
+    if (fDateTo   && r.date > fDateTo)   return false;
+    if (fStatus === "paid"    && r.commission <= 0) return false;
+    if (fStatus === "pending_pay" && (r.status !== "pending")) return false;
+    if (fStatus === "rejected" && r.status !== "rejected") return false;
+    return true;
+  });
+
+  const totalBonus     = filtered.reduce((s, r) => s + (r.commission || 0), 0);
+  const totalRecurring = filtered.filter(r=>r.status==="active").reduce((s,r) => s + (r.recurring||0), 0);
+  const totalPending   = filtered.filter(r=>r.status==="pending").length;
+  const totalRejected  = filtered.filter(r=>r.status==="rejected").length;
+
+  const S = {
+    th: { color: "#5b7fa6", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", padding: "10px 14px", background: "#091220", whiteSpace: "nowrap" },
+    td: (i) => ({ padding: "11px 14px", borderBottom: "1px solid #0e1e3a", background: i%2 ? "#080f1e" : "#0b1628", fontSize: 13, color: "#c8d8e8", verticalAlign: "middle" }),
+    input: { background: "#0a1628", border: "1px solid #1e3a5f", borderRadius: 7, padding: "8px 12px", color: "#e8f0fe", fontSize: 13 },
+    select: { background: "#0a1628", border: "1px solid #1e3a5f", borderRadius: 7, padding: "8px 12px", color: "#e8f0fe", fontSize: 13 },
+  };
+
+  return (
+    <>
+      <div style={{ marginBottom: 24 }}>
+        <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: 26, fontWeight: 800, margin: "0 0 6px", color: "#e8f0fe" }}>Raport wynagrodzeń</h1>
+        <p style={{ color: "#6b8cad", margin: 0, fontSize: 14 }}>Zestawienie prowizji i premii dla partnerów</p>
+      </div>
+
+      {/* Filters */}
+      <div style={{ background: "#0e1e3a", border: "1px solid #1e3a5f", borderRadius: 14, padding: "20px 24px", marginBottom: 20 }}>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+          <div style={{ flex: "1 1 160px" }}>
+            <label style={{ display: "block", color: "#5b7fa6", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Partner</label>
+            <select value={fPartner} onChange={e => setFPartner(e.target.value)} style={{ ...S.select, width: "100%" }}>
+              <option value="all">Wszyscy</option>
+              {allPartners.map((p,i) => <option key={i} value={p.email}>{p.name}</option>)}
+            </select>
+          </div>
+          <div style={{ flex: "1 1 140px" }}>
+            <label style={{ display: "block", color: "#5b7fa6", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Data od</label>
+            <input type="date" value={fDateFrom} onChange={e => setFDateFrom(e.target.value)}
+              style={{ ...S.input, width: "100%", boxSizing: "border-box", colorScheme: "dark" }} />
+          </div>
+          <div style={{ flex: "1 1 140px" }}>
+            <label style={{ display: "block", color: "#5b7fa6", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Data do</label>
+            <input type="date" value={fDateTo} onChange={e => setFDateTo(e.target.value)}
+              style={{ ...S.input, width: "100%", boxSizing: "border-box", colorScheme: "dark" }} />
+          </div>
+          <div style={{ flex: "1 1 160px" }}>
+            <label style={{ display: "block", color: "#5b7fa6", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Typ</label>
+            <select value={fStatus} onChange={e => setFStatus(e.target.value)} style={{ ...S.select, width: "100%" }}>
+              <option value="all">Wszystkie</option>
+              <option value="paid">Wypłacone (aktywne)</option>
+              <option value="pending_pay">W toku</option>
+              <option value="rejected">Odrzucone</option>
+            </select>
+          </div>
+          <button onClick={() => { setFPartner("all"); setFDateFrom(""); setFDateTo(""); setFStatus("all"); }}
+            style={{ padding: "8px 16px", background: "none", border: "1px solid #1e3a5f", borderRadius: 7, color: "#5b7fa6", fontSize: 13, cursor: "pointer", alignSelf: "flex-end" }}>
+            Wyczyść
+          </button>
+        </div>
+      </div>
+
+      {/* KPI summary */}
+      <div style={{ display: "flex", gap: 14, marginBottom: 20, flexWrap: "wrap" }}>
+        {[
+          { label: "Premia jednorazowa",   val: `${totalBonus.toLocaleString("pl")} zł`,     color: "#3b9de8",  icon: "🎯" },
+          { label: "Prowizja miesięczna",  val: `${totalRecurring.toLocaleString("pl")} zł`, color: "#22c55e",  icon: "🔄" },
+          { label: "Polecenia w toku",     val: totalPending,                                 color: "#eab308",  icon: "⏳" },
+          { label: "Polecenia odrzucone",  val: totalRejected,                                color: "#ef4444",  icon: "✗"  },
+        ].map(c => (
+          <div key={c.label} style={{ background: "#0e1e3a", border: `1px solid ${c.color}33`, borderRadius: 12, padding: "16px 20px", flex: "1 1 160px", minWidth: 150 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+              <span style={{ color: "#5b7fa6", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em" }}>{c.label}</span>
+              <span>{c.icon}</span>
+            </div>
+            <div style={{ color: c.color, fontWeight: 800, fontSize: 22, fontFamily: "'Sora',sans-serif" }}>{c.val}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Table */}
+      <div style={{ background: "#0e1e3a", border: "1px solid #1e3a5f", borderRadius: 14, overflow: "hidden" }}>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
+            <thead>
+              <tr>
+                {["Nr polecenia","Data","Klient (firma)","Partner","Produkt","Status","Premia","Prowizja/mies.","Maks. łącznie"].map(h =>
+                  <th key={h} style={{ ...S.th, textAlign: "left" }}>{h}</th>
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 && (
+                <tr><td colSpan={9} style={{ padding: "40px", textAlign: "center", color: "#3a4f6a" }}>Brak danych spełniających kryteria</td></tr>
+              )}
+              {filtered.map((r, i) => {
+                const maxTotal = (r.commission||0) + (r.recurring||0) * (r.months||0);
+                return (
+                  <tr key={r.id} style={{ cursor: "pointer" }} onClick={() => setHighlighted(highlighted===r.id ? null : r.id)}>
+                    <td style={{ ...S.td(i), outline: highlighted===r.id ? "2px solid #3b9de8" : "none" }}>
+                      <span style={{ fontFamily: "monospace", color: "#3b9de8", fontWeight: 700, fontSize: 12,
+                        background: "#0a1628", border: "1px solid #1e3a5f", borderRadius: 5, padding: "3px 8px" }}>
+                        {r.refNumber || "—"}
+                      </span>
+                    </td>
+                    <td style={S.td(i)}>{formatDate(r.date)}</td>
+                    <td style={{ ...S.td(i), fontWeight: 700, color: "#e8f0fe" }}>{r.company}</td>
+                    <td style={S.td(i)}>{r.partnerName}</td>
+                    <td style={S.td(i)}>
+                      <span style={{ padding: "2px 8px", background: r.product==="Hotel" ? "#1a2f4e" : "#1a2e1a",
+                        borderRadius: 5, color: r.product==="Hotel" ? "#60a5fa" : "#4ade80", fontSize: 11, fontWeight: 700 }}>
+                        {r.product}
+                      </span>
+                    </td>
+                    <td style={S.td(i)}>
+                      {{ active:   <span style={{ padding: "3px 8px", background: "#0d2e1a", border: "1px solid #16a34a", borderRadius: 20, color: "#22c55e",  fontSize: 11, fontWeight: 700 }}>Aktywny</span>,
+                         pending:  <span style={{ padding: "3px 8px", background: "#1c1a08", border: "1px solid #ca8a04", borderRadius: 20, color: "#eab308",  fontSize: 11, fontWeight: 700 }}>W toku</span>,
+                         rejected: <span style={{ padding: "3px 8px", background: "#1e0f0f", border: "1px solid #dc2626", borderRadius: 20, color: "#ef4444",  fontSize: 11, fontWeight: 700 }}>Odrzucony</span>,
+                      }[r.status] || <span style={{ color: "#5b7fa6" }}>{r.status}</span>}
+                    </td>
+                    <td style={{ ...S.td(i), color: r.commission > 0 ? "#e8f0fe" : "#3a4f6a", fontWeight: 700 }}>
+                      {r.commission > 0 ? `${r.commission.toLocaleString("pl")} zł` : "—"}
+                    </td>
+                    <td style={{ ...S.td(i), color: r.recurring > 0 ? "#22c55e" : "#3a4f6a", fontWeight: 700 }}>
+                      {r.recurring > 0 ? `+${r.recurring} zł` : "—"}
+                    </td>
+                    <td style={{ ...S.td(i), color: maxTotal > 0 ? "#f59e0b" : "#3a4f6a", fontWeight: 800 }}>
+                      {maxTotal > 0 ? `${maxTotal.toLocaleString("pl")} zł` : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            {filtered.length > 0 && (
+              <tfoot>
+                <tr>
+                  <td colSpan={6} style={{ padding: "12px 14px", background: "#091220", color: "#5b7fa6", fontSize: 12, fontWeight: 700 }}>
+                    SUMA ({filtered.length} poleceń)
+                  </td>
+                  <td style={{ padding: "12px 14px", background: "#091220", color: "#3b9de8", fontWeight: 800, fontSize: 14 }}>
+                    {filtered.reduce((s,r)=>s+(r.commission||0),0).toLocaleString("pl")} zł
+                  </td>
+                  <td style={{ padding: "12px 14px", background: "#091220", color: "#22c55e", fontWeight: 800, fontSize: 14 }}>
+                    +{filtered.filter(r=>r.status==="active").reduce((s,r)=>s+(r.recurring||0),0).toLocaleString("pl")} zł
+                  </td>
+                  <td style={{ padding: "12px 14px", background: "#091220", color: "#f59e0b", fontWeight: 800, fontSize: 14 }}>
+                    {filtered.reduce((s,r)=>s+(r.commission||0)+(r.recurring||0)*(r.months||0),0).toLocaleString("pl")} zł
+                  </td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ─── ADMIN CREDENTIALS ───────────────────────────────────────────────────────
 const ADMIN_EMAIL = "admin@lsi-cloud.pl";
 const ADMIN_PASSWORD = "LSIadmin2026!";
@@ -529,8 +874,10 @@ function AdminPanel({ onLogout }) {
           earned: p.total_earned || 0,
           pending: p.pending_payout || 0,
         })));
-        setAllReferrals(referrals.map(r => ({
+        setAllReferrals(referrals.map((r, i) => ({
           id: r.id,
+          dbId: r.id,
+          refNumber: r.ref_number || `LSI-${String(i+1).padStart(4,"0")}`,
           partnerId: r.partner_email,
           partnerName: r.partner_name,
           partnerCompany: r.partner_company,
@@ -546,7 +893,6 @@ function AdminPanel({ onLogout }) {
           months: r.months || 0,
           subscriptionValue: r.subscription_value || 0,
           notes: r.notes || [],
-          dbId: r.id,
         })));
       } catch(e) {
         console.error("Supabase load error:", e);
@@ -625,11 +971,13 @@ function AdminPanel({ onLogout }) {
         </div>
         <nav style={{ flex: 1, padding: "0 14px" }}>
           {[
-            { id: "overview",  icon: "◉", label: "Przegląd" },
-            { id: "referrals", icon: "◈", label: "Wszystkie polecenia", badge: totalPending },
-            { id: "partners",  icon: "◎", label: "Partnerzy" },
-            { id: "rates",     icon: "⬡", label: "Stawki prowizji" },
-            { id: "payouts",   icon: "◐", label: "Rozliczenia" },
+            { id: "overview",      icon: "◉", label: "Przegląd" },
+            { id: "referrals",     icon: "◈", label: "Wszystkie polecenia", badge: totalPending },
+            { id: "partners",      icon: "◎", label: "Partnerzy" },
+            { id: "rates",         icon: "⬡", label: "Stawki prowizji" },
+            { id: "payouts",       icon: "◐", label: "Rozliczenia" },
+            { id: "report_ref",    icon: "▦", label: "Raport poleceń" },
+            { id: "report_salary", icon: "▤", label: "Raport wynagrodzeń" },
           ].map(item => (
             <button key={item.id} onClick={() => setTab(item.id)}
               style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 12px", background: tab === item.id ? "#1e3a5f" : "none", border: "none", borderRadius: 9, color: tab === item.id ? "#e8f0fe" : "#5b7fa6", fontWeight: tab === item.id ? 700 : 500, fontSize: 14, cursor: "pointer", marginBottom: 3, textAlign: "left" }}>
@@ -1050,6 +1398,23 @@ function AdminPanel({ onLogout }) {
             </div>
           </>
         )}
+
+        {/* ── RAPORT POLECEŃ ── */}
+        {!loadingData && tab === "report_ref" && (
+          <ReportReferrals
+            allReferrals={allReferrals}
+            allPartners={allPartners}
+            onJumpToRef={(id) => { setTab("referrals"); }}
+          />
+        )}
+
+        {/* ── RAPORT WYNAGRODZEŃ ── */}
+        {!loadingData && tab === "report_salary" && (
+          <ReportSalary
+            allReferrals={allReferrals}
+            allPartners={allPartners}
+          />
+        )}
       </div>
 
       {/* Payout confirm modal */}
@@ -1113,6 +1478,7 @@ export default function App() {
           setReferrals(rows.map((r, i) => ({
             id: r.id || i + 1,
             dbId: r.id,
+            refNumber: r.ref_number || `LSI-${String(i+1).padStart(4,"0")}`,
             company: r.company,
             contact: r.contact,
             email: r.email || "",
@@ -1148,8 +1514,10 @@ export default function App() {
 
   const submitReferral = async () => {
     const today = new Date().toISOString().slice(0, 10);
+    const refNumber = generateRefNumber(referrals);
     const newRef = {
       id: referrals.length + 1,
+      refNumber,
       company: addForm.company,
       contact: addForm.contact,
       email: addForm.email,
@@ -1157,7 +1525,7 @@ export default function App() {
       product: addForm.product,
       status: "pending",
       date: today,
-      commission: addForm.product === "Hotel" ? 700 : 300,
+      commission: 0,
       recurring: 0,
       months: 0,
       notes: addForm.note ? [{ date: today, text: addForm.note }] : [],
@@ -1171,6 +1539,7 @@ export default function App() {
       partner_name: p.name,
       partner_company: p.company,
       partner_code: p.refCode,
+      ref_number: refNumber,
       company: newRef.company,
       contact: newRef.contact,
       email: newRef.email,
@@ -1562,12 +1931,13 @@ export default function App() {
               <div style={{ background: "#0e1e3a", border: "1px solid #1e3a5f", borderRadius: 14, overflow: "hidden" }}>
                 {/* Table header */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 90px 100px 110px 110px 90px", gap: 0, padding: "12px 20px", background: "#091220", borderBottom: "1px solid #1e3a5f" }}>
-                  {["Firma", "Kontakt", "Produkt", "Status", "Premia", "Prowizja/mies.", ""].map(h => (
+                  {["Nr", "Firma", "Kontakt", "Produkt", "Status", "Premia", "Prowizja/mies.", ""].map(h => (
                     <div key={h} style={{ color: "#5b7fa6", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em" }}>{h}</div>
                   ))}
                 </div>
                 {filtered.map((r, i) => (
-                  <div key={r.id} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 90px 100px 110px 110px 90px", gap: 0, padding: "14px 20px", borderBottom: i < filtered.length - 1 ? "1px solid #1e3a5f" : "none", alignItems: "center" }}>
+                  <div key={r.id} style={{ display: "grid", gridTemplateColumns: "110px 1fr 1fr 90px 100px 110px 110px 90px", gap: 0, padding: "14px 20px", borderBottom: i < filtered.length - 1 ? "1px solid #1e3a5f" : "none", alignItems: "center" }}>
+                    <div style={{ fontFamily: "monospace", fontSize: 11, color: "#3b9de8", fontWeight: 700 }}>{r.refNumber || "—"}</div>
                     <div>
                       <div style={{ fontWeight: 700, fontSize: 14, color: "#e8f0fe" }}>{r.company}</div>
                       <div style={{ fontSize: 11, color: "#5b7fa6" }}>{r.date}</div>

@@ -481,6 +481,214 @@ function LoginModal({ onClose, onLogin, onShowRegister }) {
 
 
 
+
+// ─── HANDLOWCY TAB ────────────────────────────────────────────────────────────
+function SalespersonsTab({ allSalespersons, setAllSalespersons, allReferrals, onGoToRef }) {
+  const [form, setForm] = useState({ name: "", surname: "", phone: "" });
+  const [saved, setSaved] = useState(false);
+  const [expanded, setExpanded] = useState(null);
+
+  const STATUS_COLOR = {
+    pending: "#eab308", contacted: "#818cf8", demo: "#60a5fa",
+    signed: "#34d399", active: "#22c55e", rejected: "#ef4444",
+  };
+  const STATUS_LABEL = {
+    pending: "Nowe", contacted: "Kontakt nawiązany", demo: "Demo umówione",
+    signed: "Umowa podpisana", active: "Aktywny", rejected: "Odrzucony",
+  };
+  const STATUS_BG = {
+    pending: "#1c1a08", contacted: "#1a1f35", demo: "#1a2535",
+    signed: "#0f2818", active: "#0d2e1a", rejected: "#1e0f0f",
+  };
+  const STATUS_BORDER = {
+    pending: "#ca8a04", contacted: "#6366f1", demo: "#3b9de8",
+    signed: "#10b981", active: "#16a34a", rejected: "#dc2626",
+  };
+
+  const saveSalesperson = () => {
+    const fullName = `${form.name.trim()} ${form.surname.trim()}`.trim();
+    if (!fullName) return;
+    const newSp = {
+      id: Date.now(),
+      name: fullName,
+      phone: form.phone.trim(),
+    };
+    const updated = [...allSalespersons, newSp];
+    setAllSalespersons(updated);
+    localStorage.setItem("lsi_salespersons", JSON.stringify(updated));
+    setForm({ name: "", surname: "", phone: "" });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const deleteSalesperson = (id) => {
+    const updated = allSalespersons.filter(s => s.id !== id);
+    setAllSalespersons(updated);
+    localStorage.setItem("lsi_salespersons", JSON.stringify(updated));
+    if (expanded === id) setExpanded(null);
+  };
+
+  const S = {
+    input: { background: "#0a1628", border: "1px solid #1e3a5f", borderRadius: 8, padding: "10px 14px", color: "#e8f0fe", fontSize: 14, width: "100%", boxSizing: "border-box" },
+  };
+
+  return (
+    <>
+      <div style={{ marginBottom: 28 }}>
+        <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: 26, fontWeight: 800, margin: "0 0 6px", color: "#e8f0fe" }}>Handlowcy</h1>
+        <p style={{ color: "#6b8cad", margin: 0, fontSize: 14 }}>Zarządzaj handlowcami i ich przypisanymi poleceniami</p>
+      </div>
+
+      {/* Add form */}
+      <div style={{ background: "#0e1e3a", border: "1px solid #1e3a5f", borderRadius: 14, padding: "24px 28px", marginBottom: 28 }}>
+        <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: 17, fontWeight: 800, margin: "0 0 18px", color: "#e8f0fe" }}>Dodaj handlowca</h2>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: 12, alignItems: "end" }}>
+          <div>
+            <label style={{ display: "block", color: "#5b7fa6", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Imię</label>
+            <input placeholder="Jan" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+              onKeyDown={e => e.key === "Enter" && saveSalesperson()}
+              style={S.input} />
+          </div>
+          <div>
+            <label style={{ display: "block", color: "#5b7fa6", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Nazwisko</label>
+            <input placeholder="Kowalski" value={form.surname} onChange={e => setForm(p => ({ ...p, surname: e.target.value }))}
+              onKeyDown={e => e.key === "Enter" && saveSalesperson()}
+              style={S.input} />
+          </div>
+          <div>
+            <label style={{ display: "block", color: "#5b7fa6", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Telefon</label>
+            <input placeholder="+48 600 000 000" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))}
+              onKeyDown={e => e.key === "Enter" && saveSalesperson()}
+              style={S.input} />
+          </div>
+          <button onClick={saveSalesperson}
+            style={{ padding: "10px 22px", background: "linear-gradient(135deg,#1e6fb5,#3b9de8)", border: "none", borderRadius: 8, color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", whiteSpace: "nowrap" }}>
+            + Dodaj
+          </button>
+        </div>
+        {saved && (
+          <div style={{ marginTop: 12, color: "#22c55e", fontSize: 13, fontWeight: 600 }}>✓ Handlowiec dodany</div>
+        )}
+      </div>
+
+      {/* Salespersons list */}
+      {allSalespersons.length === 0 ? (
+        <div style={{ background: "#0e1e3a", border: "1px solid #1e3a5f", borderRadius: 14, padding: "48px", textAlign: "center" }}>
+          <div style={{ fontSize: 36, marginBottom: 12 }}>👤</div>
+          <div style={{ fontWeight: 700, color: "#5b7fa6", fontSize: 15 }}>Brak handlowców</div>
+          <div style={{ color: "#3a4f6a", fontSize: 13, marginTop: 4 }}>Dodaj pierwszego handlowca powyżej</div>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {allSalespersons.map(sp => {
+            const spRefs = allReferrals.filter(r => r.salesperson === sp.name);
+            const counts = spRefs.reduce((acc, r) => {
+              acc[r.status] = (acc[r.status] || 0) + 1;
+              return acc;
+            }, {});
+            const isOpen = expanded === sp.id;
+
+            return (
+              <div key={sp.id} style={{ background: "#0e1e3a", border: "1px solid #1e3a5f", borderRadius: 14, overflow: "hidden" }}>
+                {/* Header row */}
+                <div
+                  onClick={() => setExpanded(isOpen ? null : sp.id)}
+                  style={{ display: "flex", alignItems: "center", padding: "18px 24px", cursor: "pointer", gap: 16, flexWrap: "wrap" }}>
+                  {/* Avatar */}
+                  <div style={{ width: 44, height: 44, borderRadius: "50%", background: "linear-gradient(135deg,#1e6fb5,#3b9de8)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 16, color: "#fff", flexShrink: 0 }}>
+                    {sp.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
+                  </div>
+                  {/* Name + phone */}
+                  <div style={{ flex: 1, minWidth: 140 }}>
+                    <div style={{ fontWeight: 700, fontSize: 16, color: "#e8f0fe" }}>{sp.name}</div>
+                    {sp.phone && <div style={{ color: "#5b7fa6", fontSize: 13, marginTop: 2 }}>📞 {sp.phone}</div>}
+                  </div>
+                  {/* Status pills */}
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                    {spRefs.length === 0 ? (
+                      <span style={{ color: "#3a4f6a", fontSize: 13 }}>Brak poleceń</span>
+                    ) : (
+                      Object.entries(counts).map(([status, cnt]) => (
+                        <span key={status} style={{
+                          padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 700,
+                          background: STATUS_BG[status] || "#0a1628",
+                          border: `1px solid ${STATUS_BORDER[status] || "#1e3a5f"}`,
+                          color: STATUS_COLOR[status] || "#e8f0fe",
+                        }}>
+                          {STATUS_LABEL[status] || status}: {cnt}
+                        </span>
+                      ))
+                    )}
+                    <span style={{ color: "#3b9de8", fontWeight: 700, fontSize: 13, marginLeft: 4 }}>
+                      {spRefs.length} pol. łącznie
+                    </span>
+                  </div>
+                  {/* Expand / delete */}
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", marginLeft: "auto" }}>
+                    {spRefs.length > 0 && (
+                      <span style={{ color: "#5b7fa6", fontSize: 13, transition: "transform 0.2s", display: "inline-block", transform: isOpen ? "rotate(180deg)" : "rotate(0deg)" }}>▼</span>
+                    )}
+                    <button
+                      onClick={e => { e.stopPropagation(); deleteSalesperson(sp.id); }}
+                      title="Usuń handlowca"
+                      style={{ padding: "4px 10px", background: "none", border: "1px solid #7f1d1d", borderRadius: 6, color: "#ef4444", fontSize: 12, cursor: "pointer" }}>
+                      Usuń
+                    </button>
+                  </div>
+                </div>
+
+                {/* Expanded referrals list */}
+                {isOpen && spRefs.length > 0 && (
+                  <div style={{ borderTop: "1px solid #1e3a5f" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "130px 1fr 140px 160px", padding: "8px 24px", background: "#091220" }}>
+                      {["Nr polecenia", "Klient", "Produkt", "Status"].map(h => (
+                        <div key={h} style={{ color: "#5b7fa6", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em" }}>{h}</div>
+                      ))}
+                    </div>
+                    {spRefs.map((r, i) => (
+                      <div key={r.id}
+                        style={{ display: "grid", gridTemplateColumns: "130px 1fr 140px 160px", padding: "12px 24px", borderTop: "1px solid #0e1e3a", alignItems: "center", background: i % 2 ? "#080f1e" : "#0b1628" }}>
+                        {/* Ref number — clickable, jumps to referrals tab */}
+                        <button
+                          onClick={() => onGoToRef(r.id)}
+                          title="Przejdź do polecenia"
+                          style={{ background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left" }}>
+                          <span style={{ fontFamily: "monospace", color: "#3b9de8", fontWeight: 700, fontSize: 12, background: "#0a1628", border: "1px solid #1e3a5f", borderRadius: 5, padding: "3px 8px", textDecoration: "underline", textDecorationColor: "#3b9de844" }}>
+                            {r.refNumber || "—"}
+                          </span>
+                        </button>
+                        <div>
+                          <div style={{ fontWeight: 600, color: "#e8f0fe", fontSize: 13 }}>{r.company}</div>
+                          <div style={{ color: "#5b7fa6", fontSize: 11 }}>{r.date}</div>
+                        </div>
+                        <div>
+                          <span style={{ padding: "2px 8px", background: r.product === "Hotel" ? "#1a2f4e" : "#1a2e1a", borderRadius: 5, color: r.product === "Hotel" ? "#60a5fa" : "#4ade80", fontSize: 11, fontWeight: 700 }}>
+                            {r.product}
+                          </span>
+                        </div>
+                        <div>
+                          <span style={{
+                            padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
+                            background: STATUS_BG[r.status] || "#0a1628",
+                            border: `1px solid ${STATUS_BORDER[r.status] || "#1e3a5f"}`,
+                            color: STATUS_COLOR[r.status] || "#e8f0fe",
+                          }}>
+                            {STATUS_LABEL[r.status] || r.status}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+}
+
 // ─── RAPORT POLECEŃ ───────────────────────────────────────────────────────────
 function ReportReferrals({ allReferrals, allPartners, onJumpToRef }) {
   const [search, setSearch]         = useState("");
@@ -819,6 +1027,8 @@ const DEFAULT_RATES = {
   ambasador:  { bonus_gastro: 200, bonus_hotel: 300, recurring_pct: 0,  recurring_months: 0,  annual_bonus: 0    },
   partner:    { bonus_gastro: 400, bonus_hotel: 600, recurring_pct: 6,  recurring_months: 12, annual_bonus: 0    },
   premium:    { bonus_gastro: 700, bonus_hotel: 900, recurring_pct: 10, recurring_months: 24, annual_bonus: 3000 },
+  // Level thresholds (min referrals/year to reach level)
+  thresholds: { ambasador: 1, partner: 5, premium: 15 },
 };
 
 // ─── MOCK ALL-PARTNERS DATA (for admin view) ─────────────────────────────────
@@ -846,7 +1056,12 @@ const MOCK_ALL_REFERRALS = [
 function AdminPanel({ onLogout }) {
   const [tab, setTab] = useState("overview"); // overview | referrals | partners | rates | payouts
   const [rates, setRates] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("lsi_rates") || "null") || DEFAULT_RATES; } catch { return DEFAULT_RATES; }
+    try {
+      const saved = JSON.parse(localStorage.getItem("lsi_rates") || "null");
+      if (!saved) return DEFAULT_RATES;
+      // Merge: ensure thresholds always present (backward compat)
+      return { ...DEFAULT_RATES, ...saved, thresholds: { ...DEFAULT_RATES.thresholds, ...(saved.thresholds || {}) } };
+    } catch { return DEFAULT_RATES; }
   });
   const [ratesDraft, setRatesDraft] = useState(rates);
   const [ratesSaved, setRatesSaved] = useState(false);
@@ -858,6 +1073,9 @@ function AdminPanel({ onLogout }) {
   const [payoutModal, setPayoutModal] = useState(null);
   const [loadingData, setLoadingData] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [allSalespersons, setAllSalespersons] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("lsi_salespersons") || "[]"); } catch { return []; }
+  });
 
   useEffect(() => {
     const loadData = async () => {
@@ -896,6 +1114,7 @@ function AdminPanel({ onLogout }) {
           months: r.months || 0,
           subscriptionValue: r.subscription_value || 0,
           notes: r.notes || [],
+          salesperson: r.salesperson || null,
         })));
       } catch(e) {
         console.error("Supabase load error:", e);
@@ -921,6 +1140,25 @@ function AdminPanel({ onLogout }) {
     localStorage.setItem("lsi_rates", JSON.stringify(ratesDraft));
     setRatesSaved(true);
     setTimeout(() => setRatesSaved(false), 2500);
+
+    // Re-evaluate all partner levels based on new thresholds
+    const thr = ratesDraft.thresholds || DEFAULT_RATES.thresholds;
+    allPartners.forEach(partner => {
+      const count = allReferrals.filter(r =>
+        r.partnerId === partner.email && r.status !== "rejected"
+      ).length;
+      const newLevel = count >= thr.premium ? "Partner Premium"
+        : count >= thr.partner ? "Partner" : "Ambasador";
+      const newLevelNum = count >= thr.premium ? 3 : count >= thr.partner ? 2 : 1;
+      if (partner.id && newLevel !== partner.level) {
+        SB.patch("partners", partner.id, { level: newLevel, level_num: newLevelNum })
+          .catch(console.error);
+        setAllPartners(prev => prev.map(p => p.id === partner.id
+          ? { ...p, level: newLevel, levelNum: newLevelNum }
+          : p
+        ));
+      }
+    });
   };
 
   const markRealized = (ref) => {
@@ -1009,6 +1247,7 @@ function AdminPanel({ onLogout }) {
             { id: "partners",      icon: "◎", label: "Partnerzy" },
             { id: "rates",         icon: "⬡", label: "Stawki prowizji" },
             { id: "payouts",       icon: "◐", label: "Rozliczenia" },
+            { id: "handlowcy",     icon: "◑", label: "Handlowcy" },
             { id: "report_ref",    icon: "▦", label: "Raport poleceń" },
             { id: "report_salary", icon: "▤", label: "Raport wynagrodzeń" },
           ].map(item => (
@@ -1242,7 +1481,7 @@ function AdminPanel({ onLogout }) {
             <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
-                  <tr>{["Firma", "Partner", "Produkt", "Data", "Status", "Premia", "Prowizja/mies.", "Akcja"].map(h => <th key={h} style={{ ...S.th, textAlign: "left" }}>{h}</th>)}</tr>
+                  <tr>{["Firma", "Partner", "Produkt", "Data", "Status", "Premia", "Prowizja/mies.", "Handlowiec / Akcja"].map(h => <th key={h} style={{ ...S.th, textAlign: "left" }}>{h}</th>)}</tr>
                 </thead>
                 <tbody>
                   {filteredRefs.map((r, i) => (
@@ -1257,7 +1496,7 @@ function AdminPanel({ onLogout }) {
                       <td style={{ ...S.td(i%2), color: r.commission > 0 ? "#e8f0fe" : "#3a4f6a", fontWeight: 700 }}>{r.commission > 0 ? `${r.commission} zł` : "—"}</td>
                       <td style={{ ...S.td(i%2), color: r.recurring > 0 ? "#22c55e" : "#3a4f6a", fontWeight: 700 }}>{r.recurring > 0 ? `+${r.recurring} zł` : "—"}</td>
                       <td style={S.td(i%2)}>
-                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                           <select value={r.status}
                             onChange={e => {
                               const newStatus = e.target.value;
@@ -1265,13 +1504,25 @@ function AdminPanel({ onLogout }) {
                               if (r.dbId) SB.patch("referrals", r.dbId, { status: newStatus }).catch(console.error);
                               setAllReferrals(prev => prev.map(x => x.id === r.id ? { ...x, status: newStatus } : x));
                             }}
-                            style={{ background: "#0a1628", border: "1px solid #1e3a5f", borderRadius: 6, padding: "5px 8px", color: "#e8f0fe", fontSize: 12, cursor: "pointer" }}>
+                            style={{ background: "#0a1628", border: "1px solid #1e3a5f", borderRadius: 6, padding: "5px 8px", color: "#e8f0fe", fontSize: 12, cursor: "pointer", width: "100%" }}>
                             <option value="pending">Nowe</option>
                             <option value="contacted">Kontakt nawiązany</option>
                             <option value="demo">Demo umówione</option>
                             <option value="signed">Umowa podpisana</option>
                             <option value="active">✓ Realizuj (aktywny)</option>
                             <option value="rejected">✗ Odrzuć</option>
+                          </select>
+                          <select value={r.salesperson || ""}
+                            onChange={e => {
+                              const sp = e.target.value || null;
+                              if (r.dbId) SB.patch("referrals", r.dbId, { salesperson: sp }).catch(console.error);
+                              setAllReferrals(prev => prev.map(x => x.id === r.id ? { ...x, salesperson: sp } : x));
+                            }}
+                            style={{ background: "#0a1628", border: "1px solid #1e3a5f", borderRadius: 6, padding: "5px 8px", color: r.salesperson ? "#e8f0fe" : "#5b7fa6", fontSize: 12, cursor: "pointer", width: "100%" }}>
+                            <option value="">— brak handlowca —</option>
+                            {allSalespersons.map((sp, si) => (
+                              <option key={si} value={sp.name}>{sp.name}</option>
+                            ))}
                           </select>
                         </div>
                       </td>
@@ -1329,9 +1580,9 @@ function AdminPanel({ onLogout }) {
             )}
 
             {[
-              { key: "ambasador", label: "Ambasador", color: "#c084fc", desc: "1–4 polecenia / rok" },
-              { key: "partner",   label: "Partner",   color: "#3b9de8", desc: "5–14 poleceń / rok" },
-              { key: "premium",   label: "Partner Premium", color: "#f59e0b", desc: "15+ poleceń / rok" },
+              { key: "ambasador", label: "Ambasador", color: "#c084fc", desc: `${(ratesDraft.thresholds||DEFAULT_RATES.thresholds).ambasador}–${(ratesDraft.thresholds||DEFAULT_RATES.thresholds).partner - 1} poleceń / rok` },
+              { key: "partner",   label: "Partner",   color: "#3b9de8", desc: `${(ratesDraft.thresholds||DEFAULT_RATES.thresholds).partner}–${(ratesDraft.thresholds||DEFAULT_RATES.thresholds).premium - 1} poleceń / rok` },
+              { key: "premium",   label: "Partner Premium", color: "#f59e0b", desc: `${(ratesDraft.thresholds||DEFAULT_RATES.thresholds).premium}+ poleceń / rok` },
             ].map(level => {
               const d = ratesDraft[level.key];
               const set = (field, val) => setRatesDraft(prev => ({ ...prev, [level.key]: { ...prev[level.key], [field]: val } }));
@@ -1367,6 +1618,62 @@ function AdminPanel({ onLogout }) {
                 </div>
               );
             })}
+
+                        {/* ── THRESHOLDS EDITOR ── */}
+            <div style={{ background: "#0e1e3a", border: "1px solid #1e3a5f", borderRadius: 14, padding: "24px 28px", marginBottom: 28 }}>
+              <div style={{ marginBottom: 18 }}>
+                <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: 17, fontWeight: 800, margin: "0 0 4px", color: "#e8f0fe" }}>Progi awansu poziomów</h2>
+                <p style={{ color: "#5b7fa6", fontSize: 13, margin: 0 }}>Minimalna liczba poleceń w roku kalendarzowym potrzebna do osiągnięcia danego poziomu</p>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
+                {[
+                  { key: "ambasador", label: "Ambasador",      color: "#c084fc", icon: "🌱", desc: "Poziom startowy" },
+                  { key: "partner",   label: "Partner",        color: "#3b9de8", icon: "⭐", desc: "Poziom pośredni" },
+                  { key: "premium",   label: "Partner Premium", color: "#f59e0b", icon: "🏆", desc: "Poziom najwyższy" },
+                ].map(({ key, label, color, icon, desc }) => (
+                  <div key={key} style={{ background: "#0a1628", border: `1px solid ${color}44`, borderRadius: 12, padding: "18px 20px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                      <span style={{ fontSize: 18 }}>{icon}</span>
+                      <div>
+                        <div style={{ color, fontWeight: 700, fontSize: 14 }}>{label}</div>
+                        <div style={{ color: "#5b7fa6", fontSize: 11 }}>{desc}</div>
+                      </div>
+                    </div>
+                    <label style={{ color: "#5b7fa6", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 6 }}>
+                      Min. poleceń / rok
+                    </label>
+                    <input
+                      type="number" min={0} max={999}
+                      value={(ratesDraft.thresholds || DEFAULT_RATES.thresholds)[key]}
+                      onChange={e => setRatesDraft(prev => ({
+                        ...prev,
+                        thresholds: {
+                          ...(prev.thresholds || DEFAULT_RATES.thresholds),
+                          [key]: Math.max(0, parseInt(e.target.value) || 0),
+                        }
+                      }))}
+                      style={{ width: "100%", background: "#060f1e", border: `1px solid ${color}55`, borderRadius: 8, padding: "10px 14px", color: "#e8f0fe", fontSize: 18, fontWeight: 800, textAlign: "center", boxSizing: "border-box" }}
+                    />
+                    <div style={{ color: "#3a4f6a", fontSize: 11, marginTop: 8, textAlign: "center" }}>
+                      {key === "ambasador" ? "od 0 poleceń" : `od ${(ratesDraft.thresholds || DEFAULT_RATES.thresholds)[key]} poleceń`}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* Visual threshold preview */}
+              <div style={{ marginTop: 20, padding: "14px 18px", background: "#060f1e", borderRadius: 10, display: "flex", alignItems: "center", gap: 0, overflow: "hidden", position: "relative" }}>
+                {[
+                  { key: "ambasador", label: "Ambasador",      color: "#c084fc", from: 0,                                                          to: (ratesDraft.thresholds||DEFAULT_RATES.thresholds).partner },
+                  { key: "partner",   label: "Partner",        color: "#3b9de8", from: (ratesDraft.thresholds||DEFAULT_RATES.thresholds).partner,   to: (ratesDraft.thresholds||DEFAULT_RATES.thresholds).premium },
+                  { key: "premium",   label: "Partner Premium", color: "#f59e0b", from: (ratesDraft.thresholds||DEFAULT_RATES.thresholds).premium,   to: null },
+                ].map(({ key, label, color, from, to }) => (
+                  <div key={key} style={{ flex: to ? to - from : 1, minWidth: 60, padding: "8px 10px", background: `${color}15`, borderRight: to ? `1px solid #1e3a5f` : "none", textAlign: "center" }}>
+                    <div style={{ color, fontWeight: 700, fontSize: 11 }}>{label}</div>
+                    <div style={{ color: "#5b7fa6", fontSize: 10, marginTop: 2 }}>{from}–{to ? to-1 : "∞"} pol.</div>
+                  </div>
+                ))}
+              </div>
+            </div>
 
             <div style={{ display: "flex", gap: 12 }}>
               <button onClick={() => setRatesDraft(DEFAULT_RATES)} style={{ padding: "12px 24px", background: "none", border: "1px solid #1e3a5f", borderRadius: 10, color: "#6b8cad", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>
@@ -1463,6 +1770,16 @@ function AdminPanel({ onLogout }) {
               </table>
             </div>
           </>
+        )}
+
+        {/* ── HANDLOWCY ── */}
+        {!loadingData && tab === "handlowcy" && (
+          <SalespersonsTab
+            allSalespersons={allSalespersons}
+            setAllSalespersons={setAllSalespersons}
+            allReferrals={allReferrals}
+            onGoToRef={(refId) => setTab("referrals")}
+          />
         )}
 
         {/* ── RAPORT POLECEŃ ── */}
@@ -1569,6 +1886,15 @@ export default function App() {
 
   // ── Refresh partner data without logout ──────────────────────────────────
   const [refreshing, setRefreshing] = useState(false);
+
+  // ── Read thresholds from localStorage (set by admin in rates tab) ─────────
+  const getThresholds = () => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("lsi_rates") || "null");
+      return { ...{ ambasador: 1, partner: 5, premium: 15 }, ...(saved?.thresholds || {}) };
+    } catch { return { ambasador: 1, partner: 5, premium: 15 }; }
+  };
+  const [thresholds, setThresholds] = useState(getThresholds);
   const reloadPartnerData = async () => {
     if (!partner || !partner.email || partner.email === "demo@lsi-cloud.pl") return;
     setRefreshing(true);
@@ -1599,6 +1925,8 @@ export default function App() {
           pendingPayout: parseFloat(pRows[0].pending_payout) || 0,
         }));
       }
+      // Refresh thresholds from localStorage in case admin updated them
+      setThresholds(getThresholds());
     } catch(e) {
       console.error("Reload error:", e);
     } finally {
@@ -1615,6 +1943,8 @@ export default function App() {
   const totalRecurring = referrals.filter(r => r.status === "active").reduce((s, r) => s + (r.recurring||0), 0);
   const liveEarned  = referrals.filter(r => r.status === "active").reduce((s, r) => s + (r.commission||0), 0);
   const livePending = liveEarned;
+  // Count all non-rejected referrals as annual progress
+  const liveAnnualReferrals = referrals.filter(r => r.status !== "rejected").length;
 
   const [emailStatus, setEmailStatus] = useState(null); // null | 'sending' | 'sent' | 'error'
   const [editModal, setEditModal] = useState(null); // referral id or null
@@ -1978,25 +2308,65 @@ export default function App() {
               </div>
 
               {/* Progress to next level */}
-              <div style={{ background: "#0e1e3a", border: "1px solid #1e3a5f", borderRadius: 14, padding: "24px 28px", marginBottom: 28 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
-                  <div>
-                    <span style={{ color: "#e8f0fe", fontWeight: 700, fontSize: 15 }}>Postęp do poziomu Partner Premium</span>
-                    <span style={{ color: "#6b8cad", fontSize: 13, marginLeft: 12 }}>{p.annualReferrals} / {p.annualTarget} poleceń w tym roku</span>
+              {(() => {
+                const thr = thresholds;
+                const cur = liveAnnualReferrals;
+                // Determine current and next level
+                const currentLevel = cur >= thr.premium ? "premium"
+                  : cur >= thr.partner ? "partner" : "ambasador";
+                const levelLabels = { ambasador: "Ambasador", partner: "Partner", premium: "Partner Premium" };
+                const levelColors = { ambasador: "#c084fc", partner: "#3b9de8", premium: "#f59e0b" };
+                const isMax = currentLevel === "premium";
+                const nextLevel = currentLevel === "ambasador" ? "partner"
+                  : currentLevel === "partner" ? "premium" : "premium";
+                const nextThreshold = currentLevel === "ambasador" ? thr.partner
+                  : thr.premium;
+                const prevThreshold = currentLevel === "ambasador" ? 0
+                  : currentLevel === "partner" ? thr.partner : thr.partner;
+                const rangeSize = nextThreshold - (currentLevel === "ambasador" ? 0 : currentLevel === "partner" ? thr.partner : thr.partner);
+                const progress = isMax ? 100
+                  : Math.min(100, Math.round(((cur - (currentLevel === "ambasador" ? 0 : currentLevel === "partner" ? thr.partner : thr.partner)) / (nextThreshold - (currentLevel === "ambasador" ? 0 : currentLevel === "partner" ? thr.partner : thr.partner))) * 100));
+                const remaining = isMax ? 0 : nextThreshold - cur;
+                const nextR = rates[nextLevel] || {};
+                return (
+                  <div style={{ background: "#0e1e3a", border: `1px solid ${levelColors[currentLevel]}33`, borderRadius: 14, padding: "24px 28px", marginBottom: 28 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
+                      <div>
+                        <span style={{ color: "#e8f0fe", fontWeight: 700, fontSize: 15 }}>
+                          {isMax ? "Osiągnięto najwyższy poziom!" : `Postęp do poziomu ${levelLabels[nextLevel]}`}
+                        </span>
+                        <span style={{ color: "#6b8cad", fontSize: 13, marginLeft: 12 }}>
+                          {cur} / {isMax ? cur : nextThreshold} poleceń w tym roku
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                        <LevelBadge level={levelLabels[currentLevel]} />
+                        {!isMax && <><span style={{ color: "#5b7fa6" }}>→</span><LevelBadge level={levelLabels[nextLevel]} /></>}
+                      </div>
+                    </div>
+                    {/* Progress bar with milestones */}
+                    <div style={{ position: "relative", marginBottom: 8 }}>
+                      <div style={{ background: "#0a1628", borderRadius: 8, height: 12, overflow: "hidden" }}>
+                        <div style={{ width: `${progress}%`, height: "100%", background: `linear-gradient(90deg,${levelColors[currentLevel]}88,${levelColors[currentLevel]})`, borderRadius: 8, transition: "width 0.8s ease" }} />
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+                        <span style={{ color: "#5b7fa6", fontSize: 11 }}>{currentLevel === "ambasador" ? 0 : currentLevel === "partner" ? thr.partner : thr.partner} pol.</span>
+                        <span style={{ color: levelColors[currentLevel], fontSize: 11, fontWeight: 700 }}>{progress}%</span>
+                        <span style={{ color: "#5b7fa6", fontSize: 11 }}>{isMax ? cur : nextThreshold} pol.</span>
+                      </div>
+                    </div>
+                    <div style={{ color: "#6b8cad", fontSize: 12, marginTop: 6 }}>
+                      {isMax
+                        ? <span style={{ color: "#f59e0b", fontWeight: 700 }}>🏆 Poziom Partner Premium osiągnięty!</span>
+                        : <>Jeszcze <strong style={{ color: levelColors[nextLevel] }}>{remaining} {remaining === 1 ? "polecenie" : remaining < 5 ? "polecenia" : "poleceń"}</strong> do poziomu {levelLabels[nextLevel]}
+                          {nextR.recurring_pct > 0 && ` — odblokujesz prowizję ${nextR.recurring_pct}% przez ${nextR.recurring_months} mies.`}
+                          {nextR.annual_bonus > 0 && ` i bonus roczny ${nextR.annual_bonus.toLocaleString("pl")} zł`}
+                        </>
+                      }
+                    </div>
                   </div>
-                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                    <LevelBadge level="Partner" />
-                    <span style={{ color: "#5b7fa6" }}>→</span>
-                    <LevelBadge level="Partner Premium" />
-                  </div>
-                </div>
-                <div style={{ background: "#0a1628", borderRadius: 8, height: 10, overflow: "hidden" }}>
-                  <div style={{ width: `${(p.annualReferrals / p.annualTarget) * 100}%`, height: "100%", background: "linear-gradient(90deg,#1e6fb5,#3b9de8,#c084fc)", borderRadius: 8, transition: "width 0.8s ease" }} />
-                </div>
-                <div style={{ color: "#6b8cad", fontSize: 12, marginTop: 10 }}>
-                  Jeszcze <strong style={{ color: "#3b9de8" }}>{p.annualTarget - p.annualReferrals} poleceń</strong> do poziomu Premium — odblokujesz prowizję cykliczną przez 24 miesiące i bonus roczny od 3 000 zł
-                </div>
-              </div>
+                );
+              })()}
 
               {/* Recent referrals */}
               <div style={{ background: "#0e1e3a", border: "1px solid #1e3a5f", borderRadius: 14, padding: "24px 28px" }}>

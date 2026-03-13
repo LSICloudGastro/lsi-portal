@@ -91,11 +91,15 @@ const MOCK_PAYOUTS = [
   { id: 6, date: "2026-04-15", amount: 1140, type: "Prowizja cykliczna", status: "upcoming" },
 ];
 
-// ─── EMAILJS CONFIG ──────────────────────────────────────────────────────────
+// ─── EMAILJS CONFIG ───────────────────────────const payout───────────────────────────────
 const EMAILJS_SERVICE_ID = "service_qmx8ujf";
 const EMAILJS_TEMPLATE_ID = "template_6gwabn5";
 const EMAILJS_PUBLIC_KEY = "svEUxwTzP4gUCkSwo";
 const NOTIFY_EMAIL = "mlichota@gastro.pl";
+// NOTE: Payout emails use same template with extra vars:
+// {{payout_amount}}, {{payout_date}}, {{payout_note}}, {{refs_list}}, {{to_email}}
+// Make sure EmailJS template sends TO {{to_email}} for payout notifications
+const PAYOUT_TEMPLATE_ID = "template_zc65yzo"; // ← zmień po utworzeniu szablonu w EmailJS
 
 async function sendReferralEmail(partner, ref) {
   try {
@@ -378,6 +382,8 @@ function LoginModal({ onClose, onLogin, onShowRegister }) {
             nextPayout: "do 15. dnia miesiąca",
             annualReferrals: row.annual_referrals || 0,
             annualTarget: row.annual_target || 5,
+            lastPayoutDate: row.last_payout_date || null,
+            lastPayoutAmount: row.last_payout_amount || 0,
             dbId: row.id,
           });
           onClose();
@@ -1071,6 +1077,9 @@ function AdminPanel({ onLogout }) {
   const [filterStatus, setFilterStatus] = useState("all");
   const [markModal, setMarkModal] = useState(null);
   const [payoutModal, setPayoutModal] = useState(null);
+  const [payoutForm, setPayoutForm]   = useState({ amount: "", date: "", note: "", sendEmail: true });
+  const [payoutSending, setPayoutSending] = useState(false);
+  const [payoutDone, setPayoutDone]   = useState(null); // partner name after success
   const [loadingData, setLoadingData] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [allSalespersons, setAllSalespersons] = useState(() => {
@@ -1133,6 +1142,81 @@ function AdminPanel({ onLogout }) {
     setRefreshing(true);
     await loadData();
     setRefreshing(false);
+  };
+
+  const sendPayoutEmail = async (partner, amount, date, note) => {
+    try {
+      // Build referral list for this partner
+      const partnerRefs = allReferrals.filter(r =>
+        (r.partnerId === partner.email || r.partnerId === partner.id) && r.status === "active"
+      );
+      const refsList = partnerRefs.map(r =>
+        `• ${r.refNumber || r.id} — ${r.company} (${r.product}) — prowizja: ${r.commission} zł + ${r.recurring} zł/mies.`
+      ).join("\n");
+
+      await fetch("https://api.emailjs.com/api/v1.0/email/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          service_id:  EMAILJS_SERVICE_ID,
+          template_id: PAYOUT_TEMPLATE_ID,
+          user_id:     EMAILJS_PUBLIC_KEY,
+          template_params: {
+            to_email:       partner.email,
+            partner_name:   partner.name,
+            partner_company: partner.company || "",
+            partner_email:  partner.email,
+            partner_code:   partner.code || "",
+            payout_amount:  `${parseFloat(amount).toLocaleString("pl")} zł`,
+            payout_date:    date,
+            payout_note:    note || "Brak dodatkowych uwag.",
+            refs_list:      refsList || "Brak aktywnych poleceń.",
+            ref_company:    "—", ref_contact: "—", ref_email: "—",
+            ref_phone: "—", ref_product: "—", ref_date: "—", ref_note: "—",
+          },
+        }),
+      });
+      return true;
+    } catch (err) {
+      console.error("Email send failed:", err);
+      return false;
+    }
+  };
+
+  const confirmPayout = async () => {
+    if (!payoutModal) return;
+    const amount = parseFloat(payoutForm.amount) || payoutModal.pending;
+    const date   = payoutForm.date || new Date().toISOString().slice(0, 10);
+    const note   = payoutForm.note.trim();
+
+    setPayoutSending(true);
+    try {
+      // Mark payout in Supabase
+      if (payoutModal.id) {
+        await SB.patch("partners", payoutModal.id, {
+          pending_payout: 0,
+          last_payout_date:   date,
+          last_payout_amount: amount,
+        }).catch(console.error);
+      }
+      // Update local state
+      setAllPartners(prev => prev.map(p => p.id === payoutModal.id
+        ? { ...p, pending: 0, lastPayoutDate: date, lastPayoutAmount: amount }
+        : p
+      ));
+
+      // Send email
+      let emailOk = true;
+      if (payoutForm.sendEmail) {
+        emailOk = await sendPayoutEmail(payoutModal, amount, date, note);
+      }
+
+      setPayoutDone({ name: payoutModal.name, emailOk, sendEmail: payoutForm.sendEmail });
+      setPayoutModal(null);
+      setPayoutForm({ amount: "", date: "", note: "", sendEmail: true });
+    } finally {
+      setPayoutSending(false);
+    }
   };
 
   const saveRates = () => {
@@ -1756,12 +1840,19 @@ function AdminPanel({ onLogout }) {
                         <td style={{ ...S.td(i%2), color: p.pending > 0 ? "#f59e0b" : "#3a4f6a", fontWeight: 700 }}>{p.pending > 0 ? `${p.pending.toLocaleString("pl")} zł` : "—"}</td>
                         <td style={{ ...S.td(i%2), color: p.pending + monthlySum > 0 ? "#e8f0fe" : "#3a4f6a", fontWeight: 800, fontSize: 15 }}>{p.pending + monthlySum > 0 ? `${(p.pending + monthlySum).toLocaleString("pl")} zł` : "—"}</td>
                         <td style={S.td(i%2)}>
-                          {p.pending > 0 && (
-                            <button onClick={() => setPayoutModal(p)}
-                              style={{ padding: "6px 14px", background: "linear-gradient(135deg,#1e6fb5,#3b9de8)", border: "none", borderRadius: 7, color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
-                              💳 Oznacz wypłatę
+                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                            <button onClick={() => { setPayoutForm({ amount: String(p.pending), date: new Date().toISOString().slice(0,10), note: "", sendEmail: true }); setPayoutModal(p); }}
+                              disabled={p.pending <= 0}
+                              style={{ padding: "7px 14px", background: p.pending > 0 ? "linear-gradient(135deg,#1e6fb5,#3b9de8)" : "#0a1628", border: p.pending > 0 ? "none" : "1px solid #1e3a5f", borderRadius: 7, color: p.pending > 0 ? "#fff" : "#3a4f6a", fontWeight: 700, fontSize: 12, cursor: p.pending > 0 ? "pointer" : "not-allowed", whiteSpace: "nowrap" }}>
+                              💳 {p.pending > 0 ? "Wypłać" : "Brak do wypłaty"}
                             </button>
-                          )}
+                            {p.lastPayoutDate && (
+                              <div style={{ fontSize: 11, color: "#3a4f6a" }}>
+                                Ostatnia: {p.lastPayoutDate}<br />
+                                <span style={{ color: "#22c55e" }}>{(p.lastPayoutAmount || 0).toLocaleString("pl")} zł</span>
+                              </div>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1801,21 +1892,153 @@ function AdminPanel({ onLogout }) {
       </div>
 
       {/* Payout confirm modal */}
+      {/* ── SUCCESS TOAST ── */}
+      {payoutDone && (
+        <div style={{ position: "fixed", bottom: 32, right: 32, zIndex: 2000, background: "#0d2e1a", border: "1px solid #16a34a", borderRadius: 14, padding: "18px 24px", maxWidth: 360, boxShadow: "0 8px 40px #00000066" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+            <span style={{ fontSize: 22 }}>✅</span>
+            <span style={{ color: "#22c55e", fontWeight: 700, fontSize: 15 }}>Wypłata zarejestrowana</span>
+          </div>
+          <div style={{ color: "#8aaecb", fontSize: 13 }}>
+            {payoutDone.sendEmail
+              ? payoutDone.emailOk
+                ? <>E-mail z potwierdzeniem wysłany do <strong style={{ color: "#e8f0fe" }}>{payoutDone.name}</strong>.</>
+                : <>Wypłata zapisana, ale wysyłka e-maila <span style={{ color: "#ef4444" }}>nie powiodła się</span>.</>
+              : <>Wypłata zapisana dla <strong style={{ color: "#e8f0fe" }}>{payoutDone.name}</strong> (bez e-maila).</>
+            }
+          </div>
+          <button onClick={() => setPayoutDone(null)}
+            style={{ marginTop: 12, padding: "6px 16px", background: "none", border: "1px solid #16a34a", borderRadius: 7, color: "#22c55e", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+            Zamknij
+          </button>
+        </div>
+      )}
+
+      {/* ── PAYOUT MODAL ── */}
       {payoutModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(6,15,30,0.92)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div style={{ background: "#0e1e3a", border: "1px solid #1e3a5f", borderRadius: 16, width: "100%", maxWidth: 420, padding: "36px 40px" }}>
-            <h3 style={{ color: "#e8f0fe", fontFamily: "'Sora',sans-serif", fontSize: 20, fontWeight: 700, margin: "0 0 6px" }}>Oznacz wypłatę</h3>
-            <p style={{ color: "#6b8cad", fontSize: 13, margin: "0 0 20px" }}>Potwierdź wypłatę dla partnera</p>
-            <div style={{ background: "#091220", borderRadius: 10, border: "1px solid #1e3a5f", padding: "14px 16px", marginBottom: 20 }}>
-              <div style={{ fontWeight: 700, color: "#e8f0fe", marginBottom: 4 }}>{payoutModal.name}</div>
-              <div style={{ color: "#6b8cad", fontSize: 13 }}>{payoutModal.email}</div>
-              <div style={{ color: "#f59e0b", fontWeight: 800, fontSize: 22, marginTop: 10, fontFamily: "'Sora',sans-serif" }}>{payoutModal.pending.toLocaleString("pl")} zł</div>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(6,15,30,0.94)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ background: "#0e1e3a", border: "1px solid #1e3a5f", borderRadius: 18, width: "100%", maxWidth: 500, padding: "36px 40px", position: "relative", maxHeight: "92vh", overflowY: "auto" }}>
+            <button onClick={() => { setPayoutModal(null); setPayoutForm({ amount: "", date: "", note: "", sendEmail: true }); }}
+              style={{ position: "absolute", top: 16, right: 18, background: "none", border: "none", color: "#5b7fa6", fontSize: 22, cursor: "pointer" }}>×</button>
+
+            <h3 style={{ color: "#e8f0fe", fontFamily: "'Sora',sans-serif", fontSize: 22, fontWeight: 800, margin: "0 0 4px" }}>💳 Zarejestruj wypłatę</h3>
+            <p style={{ color: "#6b8cad", fontSize: 13, margin: "0 0 24px" }}>Oznacz wypłatę i opcjonalnie wyślij powiadomienie e-mail do partnera</p>
+
+            {/* Partner info card */}
+            <div style={{ background: "#091220", borderRadius: 12, border: "1px solid #1e3a5f", padding: "16px 18px", marginBottom: 24, display: "flex", alignItems: "center", gap: 14 }}>
+              <div style={{ width: 48, height: 48, borderRadius: "50%", background: "linear-gradient(135deg,#1e6fb5,#3b9de8)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 18, color: "#fff", flexShrink: 0 }}>
+                {payoutModal.name.split(" ").map(n => n[0]).join("").slice(0,2).toUpperCase()}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, color: "#e8f0fe", fontSize: 15 }}>{payoutModal.name}</div>
+                <div style={{ color: "#5b7fa6", fontSize: 12, marginTop: 2 }}>{payoutModal.email}</div>
+                {payoutModal.company && <div style={{ color: "#5b7fa6", fontSize: 12 }}>{payoutModal.company}</div>}
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ color: "#5b7fa6", fontSize: 11, marginBottom: 2 }}>Do wypłaty</div>
+                <div style={{ color: "#f59e0b", fontWeight: 800, fontSize: 22, fontFamily: "'Sora',sans-serif" }}>{payoutModal.pending.toLocaleString("pl")} zł</div>
+              </div>
             </div>
+
+            {/* Active referrals summary */}
+            {(() => {
+              const pRefs = allReferrals.filter(r =>
+                (r.partnerId === payoutModal.email || r.partnerId === payoutModal.id) && r.status === "active"
+              );
+              if (pRefs.length === 0) return null;
+              return (
+                <div style={{ background: "#091220", borderRadius: 10, border: "1px solid #1e3a5f", padding: "12px 16px", marginBottom: 24 }}>
+                  <div style={{ color: "#5b7fa6", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>
+                    Aktywne polecenia ({pRefs.length})
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {pRefs.map(r => (
+                      <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12 }}>
+                        <span>
+                          <span style={{ fontFamily: "monospace", color: "#3b9de8", background: "#0a1628", border: "1px solid #1e3a5f", borderRadius: 4, padding: "1px 6px", marginRight: 8 }}>{r.refNumber || "—"}</span>
+                          <span style={{ color: "#c8d8e8" }}>{r.company}</span>
+                        </span>
+                        <span style={{ color: "#22c55e", fontWeight: 700 }}>
+                          {r.commission > 0 ? `${r.commission} zł` : ""}
+                          {r.recurring > 0 ? ` +${r.recurring} zł/mies.` : ""}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Form fields */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 24 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div>
+                  <label style={{ display: "block", color: "#5b7fa6", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Kwota wypłaty (zł)</label>
+                  <input
+                    type="number" min={0}
+                    placeholder={payoutModal.pending}
+                    value={payoutForm.amount}
+                    onChange={e => setPayoutForm(p => ({ ...p, amount: e.target.value }))}
+                    style={{ width: "100%", background: "#060f1e", border: "1px solid #1e3a5f", borderRadius: 8, padding: "10px 14px", color: "#e8f0fe", fontSize: 15, fontWeight: 700, boxSizing: "border-box" }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: "block", color: "#5b7fa6", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Data wypłaty</label>
+                  <input
+                    type="date"
+                    value={payoutForm.date || new Date().toISOString().slice(0,10)}
+                    onChange={e => setPayoutForm(p => ({ ...p, date: e.target.value }))}
+                    style={{ width: "100%", background: "#060f1e", border: "1px solid #1e3a5f", borderRadius: 8, padding: "10px 14px", color: "#e8f0fe", fontSize: 14, boxSizing: "border-box", colorScheme: "dark" }}
+                  />
+                </div>
+              </div>
+              <div>
+                <label style={{ display: "block", color: "#5b7fa6", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Notatka / komentarz (opcjonalnie)</label>
+                <textarea
+                  rows={3}
+                  placeholder="np. Przelew na rachunek bankowy nr XXXX, dziękujemy za współpracę!"
+                  value={payoutForm.note}
+                  onChange={e => setPayoutForm(p => ({ ...p, note: e.target.value }))}
+                  style={{ width: "100%", background: "#060f1e", border: "1px solid #1e3a5f", borderRadius: 8, padding: "10px 14px", color: "#e8f0fe", fontSize: 13, resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }}
+                />
+              </div>
+
+              {/* Send email toggle */}
+              <div
+                onClick={() => setPayoutForm(p => ({ ...p, sendEmail: !p.sendEmail }))}
+                style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 18px", background: payoutForm.sendEmail ? "#0a1f3a" : "#091220", border: `1px solid ${payoutForm.sendEmail ? "#3b9de8" : "#1e3a5f"}`, borderRadius: 10, cursor: "pointer", transition: "all 0.2s" }}>
+                <div style={{ width: 44, height: 24, borderRadius: 12, background: payoutForm.sendEmail ? "#3b9de8" : "#1e3a5f", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                  <div style={{ position: "absolute", top: 3, left: payoutForm.sendEmail ? 23 : 3, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "left 0.2s" }} />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: payoutForm.sendEmail ? "#e8f0fe" : "#6b8cad" }}>
+                    📧 Wyślij e-mail do partnera
+                  </div>
+                  <div style={{ fontSize: 12, color: "#5b7fa6", marginTop: 2 }}>
+                    {payoutForm.sendEmail
+                      ? `Powiadomienie trafi na: ${payoutModal.email}`
+                      : "Partner nie zostanie powiadomiony e-mailem"}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
             <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => setPayoutModal(null)} style={{ flex: 1, padding: "11px", background: "none", border: "1px solid #1e3a5f", borderRadius: 9, color: "#6b8cad", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>Anuluj</button>
-              <button onClick={() => { setPayoutModal(null); alert("✓ Wypłata oznaczona jako zrealizowana. W wersji produkcyjnej wysłano by powiadomienie do partnera."); }}
-                style={{ flex: 2, padding: "11px", background: "linear-gradient(135deg,#1e6fb5,#3b9de8)", border: "none", borderRadius: 9, color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
-                ✓ Potwierdź wypłatę
+              <button
+                onClick={() => { setPayoutModal(null); setPayoutForm({ amount: "", date: "", note: "", sendEmail: true }); }}
+                disabled={payoutSending}
+                style={{ flex: 1, padding: "12px", background: "none", border: "1px solid #1e3a5f", borderRadius: 10, color: "#6b8cad", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>
+                Anuluj
+              </button>
+              <button
+                onClick={confirmPayout}
+                disabled={payoutSending}
+                style={{ flex: 2, padding: "12px", background: payoutSending ? "#1e3a5f" : "linear-gradient(135deg,#1e6fb5,#3b9de8)", border: "none", borderRadius: 10, color: "#fff", fontWeight: 700, fontSize: 15, cursor: payoutSending ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                {payoutSending
+                  ? <><span className="spin" style={{ display: "inline-block" }}>↻</span> Wysyłanie…</>
+                  : <>✓ {payoutForm.sendEmail ? "Zapisz i wyślij e-mail" : "Zapisz wypłatę"}</>
+                }
               </button>
             </div>
           </div>

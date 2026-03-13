@@ -1,4 +1,4 @@
-# LSI Cloud — Portal Partnerski
+#  LSI Cloud — Portal Partnerski
 
 Prototyp portalu partnerskiego dla programu poleceń LSI Cloud.
 

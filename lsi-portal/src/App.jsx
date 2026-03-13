@@ -19,15 +19,15 @@ const MOCK_PARTNER = {
 };
 
 const MOCK_REFERRALS = [
-  { id: 1, company: "Pizzeria Napoli", contact: "Adam Wiśniewski", product: "Gastro", status: "active", date: "2026-02-10", commission: 480, recurring: 92, months: 7 },
-  { id: 2, company: "Hotel Bursztyn", contact: "Kasia Nowak", product: "Hotel", status: "active", date: "2026-01-22", commission: 700, recurring: 138, months: 5 },
-  { id: 3, company: "Kawiarnia Złota", contact: "Piotr Zając", product: "Gastro", status: "pending", date: "2026-03-01", commission: 300, recurring: 0, months: 0 },
-  { id: 4, company: "Pensjonat Morski", contact: "Zofia Kwiatkowska", product: "Hotel", status: "active", date: "2025-11-18", commission: 650, recurring: 125, months: 10 },
-  { id: 5, company: "Food Truck Mama", contact: "Leszek Górski", product: "Gastro", status: "active", date: "2025-10-05", commission: 200, recurring: 54, months: 12 },
-  { id: 6, company: "Bistro Uroczysko", contact: "Marta Dąbrowska", product: "Gastro", status: "rejected", date: "2026-02-28", commission: 0, recurring: 0, months: 0 },
-  { id: 7, company: "Aparthotel Sunrise", contact: "Tomasz Lewandowski", product: "Hotel", status: "pending", date: "2026-03-08", commission: 700, recurring: 0, months: 0 },
-  { id: 8, company: "Jadłodajnia u Basi", contact: "Barbara Kowal", product: "Gastro", status: "active", date: "2025-09-12", commission: 200, recurring: 48, months: 12 },
-  { id: 9, company: "Willa Karpacka", contact: "Henryk Mazur", product: "Hotel", status: "active", date: "2026-01-03", commission: 650, recurring: 118, months: 6 },
+  { id: 1, company: "Pizzeria Napoli", contact: "Adam Wiśniewski", product: "Gastro", status: "active", date: "2026-02-10", commission: 480, recurring: 92, months: 7, email: "adam@napoli.pl", phone: "+48 600 111 222", notes: [{date: "2026-02-10", text: "Klient zainteresowany modułem KDS i QR Menu."}] },
+  { id: 2, company: "Hotel Bursztyn", contact: "Kasia Nowak", product: "Hotel", status: "active", date: "2026-01-22", commission: 700, recurring: 138, months: 5, email: "kasia@bursztyn.pl", phone: "+48 601 222 333", notes: [{date: "2026-01-22", text: "Obiekt 45 pokoi, potrzebuje booking engine i automatyzacji check-in."}] },
+  { id: 3, company: "Kawiarnia Złota", contact: "Piotr Zając", product: "Gastro", status: "pending", date: "2026-03-01", commission: 300, recurring: 0, months: 0, email: "", phone: "", notes: [] },
+  { id: 4, company: "Pensjonat Morski", contact: "Zofia Kwiatkowska", product: "Hotel", status: "active", date: "2025-11-18", commission: 650, recurring: 125, months: 10, email: "", phone: "", notes: [] },
+  { id: 5, company: "Food Truck Mama", contact: "Leszek Górski", product: "Gastro", status: "active", date: "2025-10-05", commission: 200, recurring: 54, months: 12, email: "", phone: "", notes: [] },
+  { id: 6, company: "Bistro Uroczysko", contact: "Marta Dąbrowska", product: "Gastro", status: "rejected", date: "2026-02-28", commission: 0, recurring: 0, months: 0, email: "", phone: "", notes: [] },
+  { id: 7, company: "Aparthotel Sunrise", contact: "Tomasz Lewandowski", product: "Hotel", status: "pending", date: "2026-03-08", commission: 700, recurring: 0, months: 0, email: "", phone: "", notes: [] },
+  { id: 8, company: "Jadłodajnia u Basi", contact: "Barbara Kowal", product: "Gastro", status: "active", date: "2025-09-12", commission: 200, recurring: 48, months: 12, email: "", phone: "", notes: [] },
+  { id: 9, company: "Willa Karpacka", contact: "Henryk Mazur", product: "Hotel", status: "active", date: "2026-01-03", commission: 650, recurring: 118, months: 6, email: "", phone: "", notes: [] },
 ];
 
 const MOCK_PAYOUTS = [
@@ -38,6 +38,44 @@ const MOCK_PAYOUTS = [
   { id: 5, date: "2025-11-15", amount: 480, type: "Premia za polecenie + prowizja", status: "paid" },
   { id: 6, date: "2026-04-15", amount: 1140, type: "Prowizja cykliczna", status: "upcoming" },
 ];
+
+// ─── EMAILJS CONFIG ──────────────────────────────────────────────────────────
+const EMAILJS_SERVICE_ID = "service_qmx8ujf";
+const EMAILJS_TEMPLATE_ID = "template_csr2o9k";
+const EMAILJS_PUBLIC_KEY = "svEUxwTzP4gUCkSwo";
+const NOTIFY_EMAIL = "mlichota@gastro.pl";
+
+async function sendReferralEmail(partner, ref) {
+  try {
+    const res = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        service_id: EMAILJS_SERVICE_ID,
+        template_id: EMAILJS_TEMPLATE_ID,
+        user_id: EMAILJS_PUBLIC_KEY,
+        template_params: {
+          to_email: NOTIFY_EMAIL,
+          partner_name: partner.name,
+          partner_company: partner.company,
+          partner_email: partner.email,
+          partner_code: partner.refCode,
+          ref_company: ref.company,
+          ref_contact: ref.contact,
+          ref_email: ref.email || "—",
+          ref_phone: ref.phone || "—",
+          ref_product: ref.product,
+          ref_date: ref.date,
+          ref_note: ref.notes && ref.notes[0] ? ref.notes[0].text : (ref.note || "—"),
+        }
+      })
+    });
+    return res.ok;
+  } catch(e) {
+    console.error("EmailJS error:", e);
+    return false;
+  }
+}
 
 // ─── REGISTRATION MODAL ───────────────────────────────────────────────────────
 function RegisterModal({ onClose, onRegister }) {
@@ -291,21 +329,49 @@ export default function App() {
   const pendingCount = referrals.filter(r => r.status === "pending").length;
   const totalRecurring = referrals.filter(r => r.status === "active").reduce((s, r) => s + r.recurring, 0);
 
-  const submitReferral = () => {
+  const [emailStatus, setEmailStatus] = useState(null); // null | 'sending' | 'sent' | 'error'
+  const [editModal, setEditModal] = useState(null); // referral id or null
+  const [newNote, setNewNote] = useState("");
+
+  const submitReferral = async () => {
+    const today = new Date().toISOString().slice(0, 10);
     const newRef = {
       id: referrals.length + 1,
       company: addForm.company,
       contact: addForm.contact,
+      email: addForm.email,
+      phone: addForm.phone,
       product: addForm.product,
       status: "pending",
-      date: new Date().toISOString().slice(0, 10),
+      date: today,
       commission: addForm.product === "Hotel" ? 700 : 300,
       recurring: 0,
       months: 0,
+      notes: addForm.note ? [{ date: today, text: addForm.note }] : [],
     };
     setReferrals(prev => [newRef, ...prev]);
     setAddSuccess(true);
-    setTimeout(() => { setAddSuccess(false); setShowAddModal(false); setAddForm({ company: "", contact: "", email: "", phone: "", product: "Gastro", note: "" }); }, 2000);
+    setEmailStatus("sending");
+
+    const ok = await sendReferralEmail(p, { ...newRef, note: addForm.note });
+    setEmailStatus(ok ? "sent" : "error");
+
+    setTimeout(() => {
+      setAddSuccess(false);
+      setShowAddModal(false);
+      setAddForm({ company: "", contact: "", email: "", phone: "", product: "Gastro", note: "" });
+      setEmailStatus(null);
+    }, 2500);
+  };
+
+  const addNoteToReferral = (id) => {
+    if (!newNote.trim()) return;
+    const today = new Date().toISOString().slice(0, 10);
+    setReferrals(prev => prev.map(r => r.id === id
+      ? { ...r, notes: [...(r.notes || []), { date: today, text: newNote.trim() }] }
+      : r
+    ));
+    setNewNote("");
   };
 
   if (!isLoggedIn) {
@@ -377,6 +443,75 @@ export default function App() {
         input:focus, select:focus, textarea:focus { border-color: #3b9de8 !important; outline: none; }
       `}</style>
 
+      {/* Edit referral modal */}
+      {editModal !== null && (() => {
+        const ref = referrals.find(r => r.id === editModal);
+        if (!ref) return null;
+        return (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(6,15,30,0.92)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+            <div style={{ background: "#0e1e3a", border: "1px solid #1e3a5f", borderRadius: 16, width: "100%", maxWidth: 520, padding: "36px 40px", position: "relative", maxHeight: "90vh", overflowY: "auto" }}>
+              <button onClick={() => setEditModal(null)} style={{ position: "absolute", top: 16, right: 18, background: "none", border: "none", color: "#5b7fa6", fontSize: 22, cursor: "pointer" }}>×</button>
+              <h3 style={{ color: "#e8f0fe", fontFamily: "'Sora',sans-serif", fontSize: 20, fontWeight: 700, margin: "0 0 4px" }}>{ref.company}</h3>
+              <div style={{ color: "#5b7fa6", fontSize: 13, marginBottom: 24 }}>{ref.contact} · {ref.product} · {ref.date}</div>
+
+              {/* Dane kontaktowe */}
+              <div style={{ background: "#091220", border: "1px solid #1e3a5f", borderRadius: 10, padding: "14px 16px", marginBottom: 24 }}>
+                <div style={{ color: "#8aaecb", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>Dane kontaktowe</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 16px" }}>
+                  {[["E-mail", ref.email || "—"], ["Telefon", ref.phone || "—"], ["Status", ref.status], ["Produkt", ref.product]].map(([k,v]) => (
+                    <div key={k}>
+                      <span style={{ color: "#5b7fa6", fontSize: 12 }}>{k}: </span>
+                      <span style={{ color: "#e8f0fe", fontSize: 13, fontWeight: 600 }}>{v}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Historia notatek */}
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ color: "#8aaecb", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12 }}>
+                  Historia notatek ({(ref.notes || []).length})
+                </div>
+                {(ref.notes || []).length === 0 && (
+                  <div style={{ color: "#3a4f6a", fontSize: 13, fontStyle: "italic", padding: "12px 0" }}>Brak notatek</div>
+                )}
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {(ref.notes || []).map((note, i) => (
+                    <div key={i} style={{ background: "#091220", border: "1px solid #1e3a5f", borderRadius: 10, padding: "12px 14px" }}>
+                      <div style={{ color: "#3b9de8", fontSize: 11, fontWeight: 700, marginBottom: 6 }}>{note.date}</div>
+                      <div style={{ color: "#c8d8e8", fontSize: 14, lineHeight: 1.6 }}>{note.text}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Dodaj nową notatkę */}
+              <div style={{ borderTop: "1px solid #1e3a5f", paddingTop: 20 }}>
+                <div style={{ color: "#8aaecb", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>Dodaj notatkę</div>
+                <textarea
+                  placeholder="Wpisz notatkę — np. wynik rozmowy, ustalenia, kolejny krok…"
+                  value={newNote}
+                  onChange={e => setNewNote(e.target.value)}
+                  rows={3}
+                  style={{ width: "100%", background: "#0a1628", border: "1px solid #1e3a5f", borderRadius: 8, padding: "10px 14px", color: "#e8f0fe", fontSize: 14, resize: "vertical", boxSizing: "border-box", fontFamily: "inherit" }}
+                />
+                <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+                  <button onClick={() => setEditModal(null)}
+                    style={{ flex: 1, padding: "11px", background: "none", border: "1px solid #1e3a5f", borderRadius: 9, color: "#6b8cad", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>
+                    Zamknij
+                  </button>
+                  <button onClick={() => { addNoteToReferral(ref.id); }}
+                    disabled={!newNote.trim()}
+                    style={{ flex: 2, padding: "11px", background: newNote.trim() ? "linear-gradient(135deg,#1e6fb5,#3b9de8)" : "#1e3a5f", border: "none", borderRadius: 9, color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
+                    + Zapisz notatkę
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Add referral modal */}
       {showAddModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(6,15,30,0.9)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
@@ -385,8 +520,11 @@ export default function App() {
             {addSuccess ? (
               <div style={{ textAlign: "center", padding: "20px 0" }}>
                 <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
-                <h3 style={{ color: "#22c55e", fontFamily: "'Sora',sans-serif", fontSize: 20, margin: "0 0 10px" }}>Polecenie wysłane!</h3>
-                <p style={{ color: "#6b8cad", fontSize: 14 }}>Nasz dział handlowy skontaktuje się z firmą w ciągu 48 godzin. Będziesz informowany o postępach e-mailem.</p>
+                <h3 style={{ color: "#22c55e", fontFamily: "'Sora',sans-serif", fontSize: 20, margin: "0 0 10px" }}>Polecenie dodane!</h3>
+                <p style={{ color: "#6b8cad", fontSize: 14, marginBottom: 16 }}>Nasz dział handlowy skontaktuje się z firmą w ciągu 48 godzin.</p>
+                {emailStatus === "sending" && <div style={{ color: "#3b9de8", fontSize: 13 }}>📧 Wysyłam powiadomienie e-mail…</div>}
+                {emailStatus === "sent" && <div style={{ color: "#22c55e", fontSize: 13 }}>✓ Powiadomienie wysłane na mlichota@gastro.pl</div>}
+                {emailStatus === "error" && <div style={{ color: "#f59e0b", fontSize: 13 }}>⚠ Nie udało się wysłać e-maila — skonfiguruj EmailJS</div>}
               </div>
             ) : (
               <>
@@ -571,13 +709,13 @@ export default function App() {
 
               <div style={{ background: "#0e1e3a", border: "1px solid #1e3a5f", borderRadius: 14, overflow: "hidden" }}>
                 {/* Table header */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 90px 100px 110px 120px", gap: 0, padding: "12px 20px", background: "#091220", borderBottom: "1px solid #1e3a5f" }}>
-                  {["Firma", "Kontakt", "Produkt", "Status", "Premia", "Prowizja/mies."].map(h => (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 90px 100px 110px 110px 90px", gap: 0, padding: "12px 20px", background: "#091220", borderBottom: "1px solid #1e3a5f" }}>
+                  {["Firma", "Kontakt", "Produkt", "Status", "Premia", "Prowizja/mies.", ""].map(h => (
                     <div key={h} style={{ color: "#5b7fa6", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em" }}>{h}</div>
                   ))}
                 </div>
                 {filtered.map((r, i) => (
-                  <div key={r.id} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 90px 100px 110px 120px", gap: 0, padding: "14px 20px", borderBottom: i < filtered.length - 1 ? "1px solid #1e3a5f" : "none", alignItems: "center" }}>
+                  <div key={r.id} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 90px 100px 110px 110px 90px", gap: 0, padding: "14px 20px", borderBottom: i < filtered.length - 1 ? "1px solid #1e3a5f" : "none", alignItems: "center" }}>
                     <div>
                       <div style={{ fontWeight: 700, fontSize: 14, color: "#e8f0fe" }}>{r.company}</div>
                       <div style={{ fontSize: 11, color: "#5b7fa6" }}>{r.date}</div>
@@ -593,6 +731,10 @@ export default function App() {
                     <div style={{ color: r.recurring > 0 ? "#22c55e" : "#3a4f6a", fontWeight: 700, fontSize: 14 }}>
                       {r.recurring > 0 ? `+${r.recurring} zł` : "—"}
                     </div>
+                    <button onClick={() => { setEditModal(r.id); setNewNote(""); }}
+                      style={{ padding: "5px 12px", background: "none", border: "1px solid #1e3a5f", borderRadius: 7, color: "#5b7fa6", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+                      ✏️ Edytuj
+                    </button>
                   </div>
                 ))}
                 {filtered.length === 0 && (

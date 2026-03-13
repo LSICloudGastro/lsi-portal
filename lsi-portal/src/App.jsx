@@ -366,17 +366,18 @@ function LoginModal({ onClose, onLogin, onShowRegister }) {
             name: row.name,
             email: row.email,
             company: row.company,
+            phone: row.phone || "",
             avatar: row.avatar || "??",
             refCode: row.ref_code,
             refLink: row.ref_link,
             level: row.level,
             levelNum: row.level_num,
             joinDate: row.join_date,
-            totalEarned: row.total_earned,
-            pendingPayout: row.pending_payout,
-            nextPayout: "—",
-            annualReferrals: row.annual_referrals,
-            annualTarget: row.annual_target,
+            totalEarned: parseFloat(row.total_earned) || 0,
+            pendingPayout: parseFloat(row.pending_payout) || 0,
+            nextPayout: "do 15. dnia miesiąca",
+            annualReferrals: row.annual_referrals || 0,
+            annualTarget: row.annual_target || 5,
             dbId: row.id,
           });
           onClose();
@@ -856,6 +857,7 @@ function AdminPanel({ onLogout }) {
   const [markModal, setMarkModal] = useState(null);
   const [payoutModal, setPayoutModal] = useState(null);
   const [loadingData, setLoadingData] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -908,6 +910,12 @@ function AdminPanel({ onLogout }) {
     loadData();
   }, []);
 
+  const reloadAdmin = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  };
+
   const saveRates = () => {
     setRates(ratesDraft);
     localStorage.setItem("lsi_rates", JSON.stringify(ratesDraft));
@@ -925,9 +933,32 @@ function AdminPanel({ onLogout }) {
 
     const updatedRef = { status: "active", commission: bonus, recurring: recurringMonthly, months: r.recurring_months, subscription_value: ref.subscriptionValue || 299 };
 
-    // Update in Supabase
+    // Update referral in Supabase
     if (ref.dbId) {
-      SB.patch("referrals", ref.dbId, updatedRef).catch(e => console.error("Supabase patch error:", e));
+      SB.patch("referrals", ref.dbId, updatedRef).catch(e => console.error("Supabase patch referral error:", e));
+    }
+
+    // Update partner pending_payout and total_earned in Supabase
+    if (partner && partner.id) {
+      // Recalculate from all active referrals for this partner (accurate total)
+      const partnerActiveRefs = allReferrals.filter(r =>
+        (r.partnerId === ref.partnerId) && (r.status === "active" || r.id === ref.id)
+      );
+      const newEarned  = partnerActiveRefs.reduce((s, r) =>
+        s + (r.id === ref.id ? bonus : (r.commission || 0)), 0);
+      const newPending = newEarned; // all earned goes to pending until payout
+
+      SB.patch("partners", partner.id, {
+        pending_payout:   newPending,
+        total_earned:     newEarned,
+        annual_referrals: (partner.referrals || 0) + 1,
+      }).catch(e => console.error("Supabase patch partner error:", e));
+
+      // Update local allPartners state
+      setAllPartners(prev => prev.map(p => p.id === partner.id
+        ? { ...p, pending: newPending, earned: newEarned, referrals: (p.referrals || 0) + 1 }
+        : p
+      ));
     }
 
     setAllReferrals(prev => prev.map(item => item.id === ref.id
@@ -957,6 +988,7 @@ function AdminPanel({ onLogout }) {
 
   return (
     <div style={{ minHeight: "100vh", background: "#060f1e", color: "#e8f0fe", fontFamily: "'DM Sans', sans-serif", display: "flex" }}>
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       <style>{"@import url('https://fonts.googleapis.com/css2?family=Sora:wght@700;800&family=DM+Sans:wght@400;500;600;700&display=swap')"}</style>
 
       {/* Sidebar */}
@@ -988,8 +1020,13 @@ function AdminPanel({ onLogout }) {
             </button>
           ))}
         </nav>
-        <div style={{ padding: "0 14px" }}>
-          <button onClick={onLogout} onClick={onLogout} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 12px", background: "none", border: "none", borderRadius: 9, color: "#5b7fa6", fontSize: 14, cursor: "pointer" }}>← Wyloguj</button>
+        <div style={{ padding: "0 14px", display: "flex", flexDirection: "column", gap: 6 }}>
+          <button onClick={reloadAdmin} disabled={refreshing}
+            style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 12px", background: refreshing ? "#0a1628" : "#0e1e3a", border: "1px solid #1e3a5f", borderRadius: 9, color: refreshing ? "#3a4f6a" : "#3b9de8", fontSize: 14, cursor: refreshing ? "not-allowed" : "pointer", fontWeight: 600, transition: "all 0.2s" }}>
+            <span className={refreshing ? "spin" : ""} style={{ fontSize: 16, display: "inline-block" }}>↻</span>
+            {refreshing ? "Odświeżanie…" : "Odśwież dane"}
+          </button>
+          <button onClick={onLogout} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 12px", background: "none", border: "none", borderRadius: 9, color: "#5b7fa6", fontSize: 14, cursor: "pointer" }}>← Wyloguj</button>
         </div>
       </div>
 
@@ -1070,9 +1107,17 @@ function AdminPanel({ onLogout }) {
         {/* ── OVERVIEW TAB ── */}
         {!loadingData && tab === "overview" && (
           <>
-            <div style={{ marginBottom: 32 }}>
-              <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: 26, fontWeight: 800, margin: "0 0 6px" }}>Panel administratora</h1>
-              <p style={{ color: "#6b8cad", margin: 0, fontSize: 14 }}>Zarządzaj programem poleceń LSI Cloud</p>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 32, flexWrap: "wrap", gap: 14 }}>
+              <div>
+                <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: 26, fontWeight: 800, margin: "0 0 6px" }}>Panel administratora</h1>
+                <p style={{ color: "#6b8cad", margin: 0, fontSize: 14 }}>Zarządzaj programem poleceń LSI Cloud</p>
+              </div>
+              <button onClick={reloadAdmin} disabled={refreshing}
+                title="Odśwież wszystkie dane"
+                style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 18px", background: "#0e1e3a", border: "1px solid #1e3a5f", borderRadius: 9, color: refreshing ? "#3a4f6a" : "#3b9de8", fontWeight: 700, fontSize: 14, cursor: refreshing ? "not-allowed" : "pointer", transition: "all 0.2s" }}>
+                <span className={refreshing ? "spin" : ""} style={{ display: "inline-block", fontSize: 16 }}>↻</span>
+                {refreshing ? "Odświeżanie…" : "Odśwież dane"}
+              </button>
             </div>
             <div style={{ display: "flex", gap: 16, marginBottom: 28, flexWrap: "wrap" }}>
               {[
@@ -1187,6 +1232,11 @@ function AdminPanel({ onLogout }) {
                 ].map(([s, label]) => (
                   <button key={s} onClick={() => setFilterStatus(s)} style={S.tabBtn(filterStatus === s)}>{label}</button>
                 ))}
+                <button onClick={reloadAdmin} disabled={refreshing}
+                  title="Odśwież dane"
+                  style={{ padding: "7px 12px", background: "#0e1e3a", border: "1px solid #1e3a5f", borderRadius: 8, color: refreshing ? "#3a4f6a" : "#3b9de8", fontWeight: 700, fontSize: 16, cursor: refreshing ? "not-allowed" : "pointer" }}>
+                  <span className={refreshing ? "spin" : ""} style={{ display: "inline-block" }}>↻</span>
+                </button>
               </div>
             </div>
             <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
@@ -1516,13 +1566,55 @@ export default function App() {
     setIsAdmin(false);
     setIsLoggedIn(true);
   };
+
+  // ── Refresh partner data without logout ──────────────────────────────────
+  const [refreshing, setRefreshing] = useState(false);
+  const reloadPartnerData = async () => {
+    if (!partner || !partner.email || partner.email === "demo@lsi-cloud.pl") return;
+    setRefreshing(true);
+    try {
+      const rows = await SB.get("referrals", `?partner_email=eq.${encodeURIComponent(partner.email)}&order=created_at.desc`);
+      setReferrals(rows.map((r, i) => ({
+        id: r.id || i + 1,
+        dbId: r.id,
+        refNumber: r.ref_number || `LSI-${String(i+1).padStart(4,"0")}`,
+        company: r.company,
+        contact: r.contact,
+        email: r.email || "",
+        phone: r.phone || "",
+        product: r.product,
+        status: r.status,
+        date: r.date,
+        commission: r.commission || 0,
+        recurring: r.recurring || 0,
+        months: r.months || 0,
+        notes: r.notes || [],
+      })));
+      // Also refresh partner row (earned/pending)
+      const pRows = await SB.get("partners", `?email=eq.${encodeURIComponent(partner.email)}`);
+      if (pRows && pRows[0]) {
+        setPartner(prev => ({
+          ...prev,
+          totalEarned:  parseFloat(pRows[0].total_earned)  || 0,
+          pendingPayout: parseFloat(pRows[0].pending_payout) || 0,
+        }));
+      }
+    } catch(e) {
+      console.error("Reload error:", e);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const [addSuccess, setAddSuccess] = useState(false);
   const p = partner;
 
   const filtered = filterStatus === "all" ? referrals : referrals.filter(r => r.status === filterStatus);
   const activeCount = referrals.filter(r => r.status === "active").length;
-  const pendingCount = referrals.filter(r => r.status === "pending").length;
-  const totalRecurring = referrals.filter(r => r.status === "active").reduce((s, r) => s + r.recurring, 0);
+  const pendingCount = referrals.filter(r => !["active","rejected"].includes(r.status)).length;
+  const totalRecurring = referrals.filter(r => r.status === "active").reduce((s, r) => s + (r.recurring||0), 0);
+  const liveEarned  = referrals.filter(r => r.status === "active").reduce((s, r) => s + (r.commission||0), 0);
+  const livePending = liveEarned;
 
   const [emailStatus, setEmailStatus] = useState(null); // null | 'sending' | 'sent' | 'error'
   const [editModal, setEditModal] = useState(null); // referral id or null
@@ -1678,6 +1770,8 @@ export default function App() {
         ::-webkit-scrollbar { width: 5px; background: #0a1628; }
         ::-webkit-scrollbar-thumb { background: #1e3a5f; border-radius: 4px; }
         input:focus, select:focus, textarea:focus { border-color: #3b9de8 !important; outline: none; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .spin { animation: spin 0.8s linear infinite; }
       `}</style>
 
       {/* Edit referral modal */}
@@ -1862,16 +1956,23 @@ export default function App() {
                   <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: 26, fontWeight: 800, margin: "0 0 6px" }}>Dzień dobry, {p.name.split(" ")[0]}! 👋</h1>
                   <p style={{ color: "#6b8cad", margin: 0, fontSize: 14 }}>Oto podsumowanie Twojego programu poleceń</p>
                 </div>
-                <button onClick={() => setShowAddModal(true)}
-                  style={{ padding: "11px 22px", background: "linear-gradient(135deg,#1e6fb5,#3b9de8)", border: "none", borderRadius: 10, color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", whiteSpace: "nowrap", boxShadow: "0 4px 20px #3b9de830" }}>
-                  + Dodaj polecenie
-                </button>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button onClick={reloadPartnerData} disabled={refreshing}
+                    title="Odśwież dane"
+                    style={{ padding: "11px 14px", background: "#0e1e3a", border: "1px solid #1e3a5f", borderRadius: 10, color: refreshing ? "#3a4f6a" : "#5b9de8", fontWeight: 700, fontSize: 16, cursor: refreshing ? "not-allowed" : "pointer", transition: "all 0.2s", lineHeight: 1 }}>
+                    <span className={refreshing ? "spin" : ""} style={{ display: "inline-block" }}>↻</span>
+                  </button>
+                  <button onClick={() => setShowAddModal(true)}
+                    style={{ padding: "11px 22px", background: "linear-gradient(135deg,#1e6fb5,#3b9de8)", border: "none", borderRadius: 10, color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", whiteSpace: "nowrap", boxShadow: "0 4px 20px #3b9de830" }}>
+                    + Dodaj polecenie
+                  </button>
+                </div>
               </div>
 
               {/* Stats */}
               <div style={{ display: "flex", gap: 16, marginBottom: 28, flexWrap: "wrap" }}>
-                <StatCard label="Łączne zarobki" value={`${p.totalEarned.toLocaleString("pl")} zł`} sub="od początku współpracy" accent="#3b9de8" icon="💰" />
-                <StatCard label="Oczekuje wypłaty" value={`${p.pendingPayout.toLocaleString("pl")} zł`} sub={`Wypłata: ${p.nextPayout}`} accent="#f59e0b" icon="⏳" />
+                <StatCard label="Łączne zarobki" value={`${liveEarned.toLocaleString("pl")} zł`} sub="od początku współpracy" accent="#3b9de8" icon="💰" />
+                <StatCard label="Oczekuje wypłaty" value={`${livePending.toLocaleString("pl")} zł`} sub={`Wypłata: ${p.nextPayout || "do 15. dnia miesiąca"}`} accent="#f59e0b" icon="⏳" />
                 <StatCard label="Aktywne polecenia" value={activeCount} sub={`${pendingCount} w trakcie weryfikacji`} accent="#22c55e" icon="✅" />
                 <StatCard label="Prowizja miesięczna" value={`${totalRecurring} zł`} sub="z aktywnych kontraktów" accent="#c084fc" icon="📈" />
               </div>
@@ -1937,6 +2038,11 @@ export default function App() {
                       {{ all: "Wszystkie", active: "Aktywne", pending: "W toku", rejected: "Odrzucone" }[s]}
                     </button>
                   ))}
+                  <button onClick={reloadPartnerData} disabled={refreshing}
+                    title="Odśwież dane"
+                    style={{ padding: "7px 12px", background: "#0e1e3a", border: "1px solid #1e3a5f", borderRadius: 8, color: refreshing ? "#3a4f6a" : "#5b9de8", fontWeight: 700, fontSize: 16, cursor: refreshing ? "not-allowed" : "pointer" }}>
+                    <span className={refreshing ? "spin" : ""} style={{ display: "inline-block" }}>↻</span>
+                  </button>
                   <button onClick={() => setShowAddModal(true)}
                     style={{ padding: "7px 18px", background: "linear-gradient(135deg,#1e6fb5,#3b9de8)", border: "none", borderRadius: 8, color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
                     + Dodaj
@@ -1985,14 +2091,21 @@ export default function App() {
           {/* PAYOUTS VIEW */}
           {view === "payouts" && (
             <>
-              <div style={{ marginBottom: 28 }}>
-                <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: 26, fontWeight: 800, margin: "0 0 6px" }}>Wypłaty</h1>
-                <p style={{ color: "#6b8cad", margin: 0, fontSize: 14 }}>Historia i planowane wypłaty prowizji</p>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28, flexWrap: "wrap", gap: 14 }}>
+                <div>
+                  <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: 26, fontWeight: 800, margin: "0 0 6px" }}>Wypłaty</h1>
+                  <p style={{ color: "#6b8cad", margin: 0, fontSize: 14 }}>Historia i planowane wypłaty prowizji</p>
+                </div>
+                <button onClick={reloadPartnerData} disabled={refreshing}
+                  title="Odśwież dane"
+                  style={{ padding: "9px 14px", background: "#0e1e3a", border: "1px solid #1e3a5f", borderRadius: 9, color: refreshing ? "#3a4f6a" : "#5b9de8", fontWeight: 700, fontSize: 16, cursor: refreshing ? "not-allowed" : "pointer" }}>
+                  <span className={refreshing ? "spin" : ""} style={{ display: "inline-block" }}>↻</span>
+                </button>
               </div>
 
               <div style={{ display: "flex", gap: 16, marginBottom: 28, flexWrap: "wrap" }}>
-                <StatCard label="Do wypłaty" value={`${(p.pendingPayout || referrals.filter(r=>r.status==="active").reduce((s,r)=>s+(r.commission||0),0)).toLocaleString("pl")} zł`} sub="naliczone premie jednorazowe" accent="#f59e0b" icon="⏳" />
-                <StatCard label="Łącznie wypłacono" value={`${p.totalEarned.toLocaleString("pl")} zł`} sub="całkowita historia wypłat" accent="#3b9de8" icon="💳" />
+                <StatCard label="Do wypłaty" value={`${livePending.toLocaleString("pl")} zł`} sub="naliczone premie jednorazowe" accent="#f59e0b" icon="⏳" />
+                <StatCard label="Łącznie zarobione" value={`${liveEarned.toLocaleString("pl")} zł`} sub="suma naliczonych premii" accent="#3b9de8" icon="💳" />
                 <StatCard label="Prowizja cykliczna" value={`${totalRecurring} zł/mies.`} sub="z aktywnych kontraktów" accent="#22c55e" icon="🔄" />
               </div>
 

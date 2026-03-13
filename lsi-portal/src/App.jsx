@@ -2327,7 +2327,9 @@ export default function App() {
                 const progress = isMax ? 100
                   : Math.min(100, Math.round(((cur - (currentLevel === "ambasador" ? 0 : currentLevel === "partner" ? thr.partner : thr.partner)) / (nextThreshold - (currentLevel === "ambasador" ? 0 : currentLevel === "partner" ? thr.partner : thr.partner))) * 100));
                 const remaining = isMax ? 0 : nextThreshold - cur;
-                const nextR = rates[nextLevel] || {};
+                // Read rates from localStorage (set by admin) for display info
+                const ratesLS = (() => { try { return JSON.parse(localStorage.getItem("lsi_rates") || "null") || {}; } catch { return {}; } })();
+                const nextR = ratesLS[nextLevel] || {};
                 return (
                   <div style={{ background: "#0e1e3a", border: `1px solid ${levelColors[currentLevel]}33`, borderRadius: 14, padding: "24px 28px", marginBottom: 28 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>

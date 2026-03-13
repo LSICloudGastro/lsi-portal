@@ -479,12 +479,12 @@ function LoginModal({ onClose, onLogin, onShowRegister }) {
 
 // ─── RAPORT POLECEŃ ───────────────────────────────────────────────────────────
 function ReportReferrals({ allReferrals, allPartners, onJumpToRef }) {
-  const [search, setSearch]         = React.useState("");
-  const [fPartner, setFPartner]     = React.useState("all");
-  const [fStatus, setFStatus]       = React.useState("all");
-  const [fDateFrom, setFDateFrom]   = React.useState("");
-  const [fDateTo, setFDateTo]       = React.useState("");
-  const [highlighted, setHighlighted] = React.useState(null);
+  const [search, setSearch]         = useState("");
+  const [fPartner, setFPartner]     = useState("all");
+  const [fStatus, setFStatus]       = useState("all");
+  const [fDateFrom, setFDateFrom]   = useState("");
+  const [fDateTo, setFDateTo]       = useState("");
+  const [highlighted, setHighlighted] = useState(null);
 
   const filtered = allReferrals.filter(r => {
     if (fPartner !== "all" && r.partnerId !== fPartner) return false;
@@ -641,11 +641,11 @@ function ReportReferrals({ allReferrals, allPartners, onJumpToRef }) {
 
 // ─── RAPORT WYNAGRODZEŃ ───────────────────────────────────────────────────────
 function ReportSalary({ allReferrals, allPartners }) {
-  const [fPartner,  setFPartner]  = React.useState("all");
-  const [fDateFrom, setFDateFrom] = React.useState("");
-  const [fDateTo,   setFDateTo]   = React.useState("");
-  const [fStatus,   setFStatus]   = React.useState("all");
-  const [highlighted, setHighlighted] = React.useState(null);
+  const [fPartner,  setFPartner]  = useState("all");
+  const [fDateFrom, setFDateFrom] = useState("");
+  const [fDateTo,   setFDateTo]   = useState("");
+  const [fStatus,   setFStatus]   = useState("all");
+  const [highlighted, setHighlighted] = useState(null);
 
   const filtered = allReferrals.filter(r => {
     if (fPartner !== "all" && r.partnerId !== fPartner) return false;

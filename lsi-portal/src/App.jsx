@@ -41,7 +41,7 @@ const MOCK_PAYOUTS = [
 
 // ─── EMAILJS CONFIG ──────────────────────────────────────────────────────────
 const EMAILJS_SERVICE_ID = "service_qmx8ujf";
-const EMAILJS_TEMPLATE_ID = "template_csr2o9k";
+const EMAILJS_TEMPLATE_ID = "template_6gwabn5";
 const EMAILJS_PUBLIC_KEY = "svEUxwTzP4gUCkSwo";
 const NOTIFY_EMAIL = "mlichota@gastro.pl";
 

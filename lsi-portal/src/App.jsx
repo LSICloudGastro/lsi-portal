@@ -186,10 +186,76 @@ function LevelBadge({ level }) {
   );
 }
 
+// ─── LOGIN MODAL ──────────────────────────────────────────────────────────────
+function LoginModal({ onClose, onLogin }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const submit = () => {
+    if (!email || !password) { setError("Wypełnij oba pola."); return; }
+    setLoading(true);
+    setError("");
+    setTimeout(() => {
+      setLoading(false);
+      // Demo: any email/password works
+      onLogin();
+      onClose();
+    }, 1200);
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(8,18,38,0.85)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ background: "#0e1e3a", border: "1px solid #1e3a5f", borderRadius: 16, width: "100%", maxWidth: 420, padding: "40px 44px", position: "relative", boxShadow: "0 32px 80px rgba(0,0,0,0.6)" }}>
+        <button onClick={onClose} style={{ position: "absolute", top: 18, right: 20, background: "none", border: "none", color: "#5b7fa6", fontSize: 22, cursor: "pointer" }}>×</button>
+        <div style={{ textAlign: "center", marginBottom: 28 }}>
+          <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 20, color: "#e8f0fe", marginBottom: 4 }}>LSI Cloud</div>
+          <div style={{ color: "#3b9de8", fontSize: 12, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase" }}>Portal Partnerski</div>
+        </div>
+        <h2 style={{ color: "#e8f0fe", fontFamily: "'Sora',sans-serif", fontSize: 20, fontWeight: 700, margin: "0 0 6px" }}>Zaloguj się</h2>
+        <p style={{ color: "#6b8cad", fontSize: 13, margin: "0 0 24px" }}>Wpisz dane swojego konta partnerskiego</p>
+
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ display: "block", color: "#8aaecb", fontSize: 11, fontWeight: 600, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.06em" }}>Adres e-mail</label>
+          <input type="email" placeholder="jan@firma.pl" value={email} onChange={e => setEmail(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && submit()}
+            style={{ width: "100%", background: "#0a1628", border: "1px solid #1e3a5f", borderRadius: 8, padding: "11px 14px", color: "#e8f0fe", fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+        </div>
+        <div style={{ marginBottom: 8 }}>
+          <label style={{ display: "block", color: "#8aaecb", fontSize: 11, fontWeight: 600, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.06em" }}>Hasło</label>
+          <input type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && submit()}
+            style={{ width: "100%", background: "#0a1628", border: "1px solid #1e3a5f", borderRadius: 8, padding: "11px 14px", color: "#e8f0fe", fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+        </div>
+        <div style={{ textAlign: "right", marginBottom: 20 }}>
+          <span style={{ color: "#3b9de8", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>Zapomniałem hasła</span>
+        </div>
+
+        {error && <div style={{ background: "#1e0f0f", border: "1px solid #dc2626", borderRadius: 8, padding: "10px 14px", color: "#ef4444", fontSize: 13, marginBottom: 16 }}>{error}</div>}
+
+        <button onClick={submit} disabled={loading}
+          style={{ width: "100%", padding: "13px", background: "linear-gradient(135deg,#1e6fb5,#3b9de8)", border: "none", borderRadius: 10, color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer", opacity: loading ? 0.7 : 1 }}>
+          {loading ? "Logowanie…" : "Zaloguj się →"}
+        </button>
+
+        <div style={{ textAlign: "center", marginTop: 20, color: "#5b7fa6", fontSize: 13 }}>
+          Nie masz konta? <span style={{ color: "#3b9de8", cursor: "pointer", fontWeight: 600 }} onClick={onClose}>Zarejestruj się</span>
+        </div>
+
+        <div style={{ marginTop: 20, padding: "12px 14px", background: "#091220", border: "1px solid #1e3a5f", borderRadius: 8, fontSize: 12, color: "#5b7fa6", textAlign: "center" }}>
+          🔑 Demo: wpisz dowolny e-mail i hasło
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── MAIN APP ────────────────────────────────────────────────────────────────
 export default function App() {
   const [view, setView] = useState("dashboard"); // dashboard | referrals | payouts | link
   const [showRegister, setShowRegister] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [filterStatus, setFilterStatus] = useState("all");
   const [showAddModal, setShowAddModal] = useState(false);
@@ -224,6 +290,7 @@ export default function App() {
     return (
       <>
         {showRegister && <RegisterModal onClose={() => setShowRegister(false)} onRegister={() => setIsLoggedIn(true)} />}
+        {showLogin && <LoginModal onClose={() => setShowLogin(false)} onLogin={() => setIsLoggedIn(true)} />}
         <div style={{ minHeight: "100vh", background: "#060f1e", fontFamily: "'DM Sans', sans-serif", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
           {/* Background grid */}
           <div style={{ position: "fixed", inset: 0, backgroundImage: "linear-gradient(#1e3a5f22 1px, transparent 1px), linear-gradient(90deg, #1e3a5f22 1px, transparent 1px)", backgroundSize: "40px 40px", pointerEvents: "none" }} />
@@ -248,9 +315,9 @@ export default function App() {
                   style={{ padding: "14px 32px", background: "linear-gradient(135deg,#1e6fb5,#3b9de8)", border: "none", borderRadius: 12, color: "#fff", fontWeight: 700, fontSize: 16, cursor: "pointer", boxShadow: "0 8px 32px #3b9de840" }}>
                   Zarejestruj się bezpłatnie →
                 </button>
-                <button onClick={() => setIsLoggedIn(true)}
+                <button onClick={() => setShowLogin(true)}
                   style={{ padding: "14px 32px", background: "none", border: "1px solid #1e3a5f", borderRadius: 12, color: "#6b8cad", fontWeight: 600, fontSize: 16, cursor: "pointer" }}>
-                  Zaloguj się (demo)
+                  Zaloguj się
                 </button>
               </div>
             </div>

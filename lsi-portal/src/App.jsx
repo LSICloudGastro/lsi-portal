@@ -53,6 +53,27 @@ function RegisterModal({ onClose, onRegister }) {
     setTimeout(() => { setLoading(false); setStep(3); }, 1800);
   };
 
+  const handleEnterPanel = () => {
+    const initials = form.name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
+    onRegister({
+      name: form.name,
+      email: form.email,
+      company: form.company,
+      avatar: initials || "??",
+      refCode: code,
+      refLink: "https://lsi-cloud.pl/?ref=" + code,
+      level: "Ambasador",
+      levelNum: 1,
+      joinDate: new Date().toISOString().slice(0, 10),
+      totalEarned: 0,
+      pendingPayout: 0,
+      nextPayout: "—",
+      annualReferrals: 0,
+      annualTarget: 5,
+    });
+    onClose();
+  };
+
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(8,18,38,0.82)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
       <div style={{ background: "#0e1e3a", border: "1px solid #1e3a5f", borderRadius: 16, width: "100%", maxWidth: 520, padding: "40px 44px", position: "relative", boxShadow: "0 32px 80px rgba(0,0,0,0.6)" }}>
@@ -123,7 +144,7 @@ function RegisterModal({ onClose, onRegister }) {
               <div style={{ color: "#6b8cad", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Twój kod polecający</div>
               <div style={{ color: "#3b9de8", fontSize: 24, fontWeight: 800, fontFamily: "monospace", letterSpacing: "0.15em" }}>{code}</div>
             </div>
-            <button onClick={() => { onRegister(); onClose(); }}
+            <button onClick={handleEnterPanel}
               style={{ width: "100%", padding: "13px", background: "linear-gradient(135deg,#1e6fb5,#3b9de8)", border: "none", borderRadius: 10, color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>
               Przejdź do panelu →
             </button>
@@ -257,12 +278,13 @@ export default function App() {
   const [showRegister, setShowRegister] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [partner, setPartner] = useState(MOCK_PARTNER);
   const [filterStatus, setFilterStatus] = useState("all");
   const [showAddModal, setShowAddModal] = useState(false);
   const [addForm, setAddForm] = useState({ company: "", contact: "", email: "", phone: "", product: "Gastro", note: "" });
   const [referrals, setReferrals] = useState(MOCK_REFERRALS);
   const [addSuccess, setAddSuccess] = useState(false);
-  const p = MOCK_PARTNER;
+  const p = partner;
 
   const filtered = filterStatus === "all" ? referrals : referrals.filter(r => r.status === filterStatus);
   const activeCount = referrals.filter(r => r.status === "active").length;
@@ -289,7 +311,7 @@ export default function App() {
   if (!isLoggedIn) {
     return (
       <>
-        {showRegister && <RegisterModal onClose={() => setShowRegister(false)} onRegister={() => setIsLoggedIn(true)} />}
+        {showRegister && <RegisterModal onClose={() => setShowRegister(false)} onRegister={(data) => { setPartner(prev => ({ ...prev, ...data })); setReferrals([]); setIsLoggedIn(true); }} />}
         {showLogin && <LoginModal onClose={() => setShowLogin(false)} onLogin={() => setIsLoggedIn(true)} />}
         <div style={{ minHeight: "100vh", background: "#060f1e", fontFamily: "'DM Sans', sans-serif", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
           {/* Background grid */}

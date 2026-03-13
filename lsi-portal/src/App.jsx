@@ -906,6 +906,7 @@ export default function App() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [addForm, setAddForm] = useState({ company: "", contact: "", email: "", phone: "", product: "Gastro", note: "" });
   const [referrals, setReferrals] = useState(MOCK_REFERRALS);
+  const [payouts, setPayouts] = useState(MOCK_PAYOUTS);
 
   const handleLogin = (partnerData) => {
     if (partnerData === "admin") {
@@ -914,11 +915,15 @@ export default function App() {
       return;
     }
     if (partnerData === null) {
+      // Demo account — show mock data
       setPartner(MOCK_PARTNER);
       setReferrals(MOCK_REFERRALS);
+      setPayouts(MOCK_PAYOUTS);
     } else {
+      // Real account — start fresh
       setPartner(prev => ({ ...prev, ...partnerData }));
       setReferrals([]);
+      setPayouts([]);
     }
     setIsAdmin(false);
     setIsLoggedIn(true);
@@ -983,7 +988,7 @@ export default function App() {
   if (!isLoggedIn) {
     return (
       <>
-        {showRegister && <RegisterModal onClose={() => setShowRegister(false)} onRegister={(data) => { setPartner(prev => ({ ...prev, ...data })); setReferrals([]); setIsLoggedIn(true); }} />}
+        {showRegister && <RegisterModal onClose={() => setShowRegister(false)} onRegister={(data) => { setPartner(prev => ({ ...prev, ...data })); setReferrals([]); setPayouts([]); setIsLoggedIn(true); }} />}
         {showLogin && <LoginModal onClose={() => setShowLogin(false)} onLogin={handleLogin} onShowRegister={() => setShowRegister(true)} />}
         <div style={{ minHeight: "100vh", background: "#060f1e", fontFamily: "'DM Sans', sans-serif", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
           {/* Background grid */}
@@ -1370,8 +1375,15 @@ export default function App() {
                     <div key={h} style={{ color: "#5b7fa6", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em" }}>{h}</div>
                   ))}
                 </div>
-                {MOCK_PAYOUTS.map((pay, i) => (
-                  <div key={pay.id} style={{ display: "grid", gridTemplateColumns: "120px 1fr 1fr 140px", gap: 0, padding: "16px 20px", borderBottom: i < MOCK_PAYOUTS.length - 1 ? "1px solid #1e3a5f" : "none", alignItems: "center" }}>
+                {payouts.length === 0 && (
+                  <div style={{ padding: "40px 20px", textAlign: "center", color: "#3a4f6a" }}>
+                    <div style={{ fontSize: 32, marginBottom: 12 }}>💳</div>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: "#5b7fa6", marginBottom: 6 }}>Brak historii wypłat</div>
+                    <div style={{ fontSize: 13 }}>Wypłaty pojawią się tutaj po realizacji pierwszego polecenia</div>
+                  </div>
+                )}
+                {payouts.map((pay, i) => (
+                  <div key={pay.id} style={{ display: "grid", gridTemplateColumns: "120px 1fr 1fr 140px", gap: 0, padding: "16px 20px", borderBottom: i < payouts.length - 1 ? "1px solid #1e3a5f" : "none", alignItems: "center" }}>
                     <div style={{ color: "#8aaecb", fontSize: 14 }}>{pay.date}</div>
                     <div style={{ color: "#e8f0fe", fontSize: 14, fontWeight: 500 }}>{pay.type}</div>
                     <div style={{ color: pay.status === "upcoming" ? "#f59e0b" : "#22c55e", fontSize: 18, fontWeight: 800, fontFamily: "'Sora',sans-serif" }}>

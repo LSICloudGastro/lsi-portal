@@ -301,11 +301,14 @@ function CopyBtn({ text, label = "Kopiuj" }) {
 // ─── STATUS BADGE ─────────────────────────────────────────────────────────────
 function Badge({ status }) {
   const map = {
-    active: { bg: "#0d2e1a", border: "#16a34a", color: "#22c55e", label: "Aktywny" },
-    pending: { bg: "#1c1a08", border: "#ca8a04", color: "#eab308", label: "W toku" },
-    rejected: { bg: "#1e0f0f", border: "#dc2626", color: "#ef4444", label: "Odrzucony" },
-    paid: { bg: "#0d2e1a", border: "#16a34a", color: "#22c55e", label: "Wypłacono" },
-    upcoming: { bg: "#0f1e35", border: "#3b9de8", color: "#60a5fa", label: "Nadchodzi" },
+    pending:   { bg: "#1c1a08", border: "#ca8a04", color: "#eab308", label: "Nowe" },
+    contacted: { bg: "#1a1f35", border: "#6366f1", color: "#818cf8", label: "Kontakt nawiązany" },
+    demo:      { bg: "#1a2535", border: "#3b9de8", color: "#60a5fa", label: "Demo umówione" },
+    signed:    { bg: "#0f2818", border: "#10b981", color: "#34d399", label: "Umowa podpisana" },
+    active:    { bg: "#0d2e1a", border: "#16a34a", color: "#22c55e", label: "Aktywny" },
+    rejected:  { bg: "#1e0f0f", border: "#dc2626", color: "#ef4444", label: "Odrzucony" },
+    paid:      { bg: "#0d2e1a", border: "#16a34a", color: "#22c55e", label: "Wypłacono" },
+    upcoming:  { bg: "#0f1e35", border: "#3b9de8", color: "#60a5fa", label: "Nadchodzi" },
   };
   const s = map[status] || map.pending;
   return (
@@ -501,10 +504,10 @@ function ReportReferrals({ allReferrals, allPartners, onJumpToRef }) {
     return true;
   });
 
-  const STATUS_LABEL = { pending: "W toku", active: "Aktywny", rejected: "Odrzucony" };
-  const STATUS_COLOR = { pending: "#eab308", active: "#22c55e", rejected: "#ef4444" };
-  const STATUS_BG    = { pending: "#1c1a08", active: "#0d2e1a", rejected: "#1e0f0f" };
-  const STATUS_BORDER= { pending: "#ca8a04", active: "#16a34a", rejected: "#dc2626" };
+  const STATUS_LABEL  = { pending:"Nowe", contacted:"Kontakt nawiązany", demo:"Demo umówione", signed:"Umowa podpisana", active:"Aktywny", rejected:"Odrzucony" };
+  const STATUS_COLOR  = { pending:"#eab308", contacted:"#818cf8", demo:"#60a5fa", signed:"#34d399", active:"#22c55e", rejected:"#ef4444" };
+  const STATUS_BG     = { pending:"#1c1a08", contacted:"#1a1f35", demo:"#1a2535", signed:"#0f2818", active:"#0d2e1a", rejected:"#1e0f0f" };
+  const STATUS_BORDER = { pending:"#ca8a04", contacted:"#6366f1", demo:"#3b9de8", signed:"#10b981", active:"#16a34a", rejected:"#dc2626" };
 
   const S = {
     th: { color: "#5b7fa6", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", padding: "10px 14px", background: "#091220", whiteSpace: "nowrap" },
@@ -542,7 +545,10 @@ function ReportReferrals({ allReferrals, allPartners, onJumpToRef }) {
             <label style={{ display: "block", color: "#5b7fa6", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Status</label>
             <select value={fStatus} onChange={e => setFStatus(e.target.value)} style={{ ...S.select, width: "100%" }}>
               <option value="all">Wszystkie</option>
-              <option value="pending">W toku</option>
+              <option value="pending">Nowe</option>
+              <option value="contacted">Kontakt nawiązany</option>
+              <option value="demo">Demo umówione</option>
+              <option value="signed">Umowa podpisana</option>
               <option value="active">Aktywne</option>
               <option value="rejected">Odrzucone</option>
             </select>
@@ -764,12 +770,7 @@ function ReportSalary({ allReferrals, allPartners }) {
                         {r.product}
                       </span>
                     </td>
-                    <td style={S.td(i)}>
-                      {{ active:   <span style={{ padding: "3px 8px", background: "#0d2e1a", border: "1px solid #16a34a", borderRadius: 20, color: "#22c55e",  fontSize: 11, fontWeight: 700 }}>Aktywny</span>,
-                         pending:  <span style={{ padding: "3px 8px", background: "#1c1a08", border: "1px solid #ca8a04", borderRadius: 20, color: "#eab308",  fontSize: 11, fontWeight: 700 }}>W toku</span>,
-                         rejected: <span style={{ padding: "3px 8px", background: "#1e0f0f", border: "1px solid #dc2626", borderRadius: 20, color: "#ef4444",  fontSize: 11, fontWeight: 700 }}>Odrzucony</span>,
-                      }[r.status] || <span style={{ color: "#5b7fa6" }}>{r.status}</span>}
-                    </td>
+                    <td style={S.td(i)}><Badge status={r.status} /></td>
                     <td style={{ ...S.td(i), color: r.commission > 0 ? "#e8f0fe" : "#3a4f6a", fontWeight: 700 }}>
                       {r.commission > 0 ? `${r.commission.toLocaleString("pl")} zł` : "—"}
                     </td>
@@ -936,7 +937,7 @@ function AdminPanel({ onLogout }) {
     setMarkModal(null);
   };
 
-  const totalPending = allReferrals.filter(r => r.status === "pending").length;
+  const totalPending = allReferrals.filter(r => !["active","rejected"].includes(r.status)).length;
   const totalActive = allReferrals.filter(r => r.status === "active").length;
   const totalCommissions = allReferrals.reduce((s, r) => s + r.commission, 0);
   const totalRecurring = allReferrals.filter(r => r.status === "active").reduce((s, r) => s + r.recurring, 0);
@@ -1118,13 +1119,19 @@ function AdminPanel({ onLogout }) {
                           style={{ padding: "6px 14px", background: "linear-gradient(135deg,#166534,#22c55e)", border: "none", borderRadius: 7, color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
                           ✓ Realizuj
                         </button>
-                        <button onClick={() => {
-                          if (r.dbId) SB.patch("referrals", r.dbId, { status: "rejected" }).catch(console.error);
-                          setAllReferrals(prev => prev.map(x => x.id === r.id ? { ...x, status: "rejected" } : x));
-                        }}
-                          style={{ padding: "6px 14px", background: "none", border: "1px solid #7f1d1d", borderRadius: 7, color: "#ef4444", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
-                          ✗ Odrzuć
-                        </button>
+                        <select onChange={e => {
+                            const s = e.target.value; if (!s) return;
+                            if (r.dbId) SB.patch("referrals", r.dbId, { status: s }).catch(console.error);
+                            setAllReferrals(prev => prev.map(x => x.id === r.id ? { ...x, status: s } : x));
+                          }}
+                          defaultValue=""
+                          style={{ background: "#0a1628", border: "1px solid #1e3a5f", borderRadius: 7, padding: "5px 8px", color: "#e8f0fe", fontSize: 12, cursor: "pointer" }}>
+                          <option value="" disabled>Zmień status…</option>
+                          <option value="contacted">Kontakt nawiązany</option>
+                          <option value="demo">Demo umówione</option>
+                          <option value="signed">Umowa podpisana</option>
+                          <option value="rejected">✗ Odrzuć</option>
+                        </select>
                       </div>
                     </div>
                   ))}
@@ -1169,10 +1176,16 @@ function AdminPanel({ onLogout }) {
                   <option value="all">Wszyscy partnerzy</option>
                   {allPartners.map((p, i) => <option key={i} value={p.email}>{p.name}</option>)}
                 </select>
-                {["all","pending","active","rejected"].map(s => (
-                  <button key={s} onClick={() => setFilterStatus(s)} style={S.tabBtn(filterStatus === s)}>
-                    {{ all: "Wszystkie", pending: `Do weryfik. (${totalPending})`, active: "Aktywne", rejected: "Odrzucone" }[s]}
-                  </button>
+                {[
+                  ["all", "Wszystkie"],
+                  ["pending", `Nowe (${allReferrals.filter(r=>r.status==="pending").length})`],
+                  ["contacted", "Kontakt"],
+                  ["demo", "Demo"],
+                  ["signed", "Podpisane"],
+                  ["active", "Aktywne"],
+                  ["rejected", "Odrzucone"],
+                ].map(([s, label]) => (
+                  <button key={s} onClick={() => setFilterStatus(s)} style={S.tabBtn(filterStatus === s)}>{label}</button>
                 ))}
               </div>
             </div>
@@ -1189,25 +1202,28 @@ function AdminPanel({ onLogout }) {
                       <td style={S.td(i%2)}><span style={{ fontSize: 12, padding: "2px 8px", background: r.product === "Hotel" ? "#1a2f4e" : "#1a2e1a", borderRadius: 5, color: r.product === "Hotel" ? "#60a5fa" : "#4ade80", fontWeight: 600 }}>{r.product}</span></td>
                       <td style={S.td(i%2)}>{r.date}</td>
                       <td style={S.td(i%2)}>
-                        {{ active: <span style={{ padding: "3px 9px", background: "#0d2e1a", border: "1px solid #16a34a", borderRadius: 20, color: "#22c55e", fontSize: 11, fontWeight: 700 }}>Aktywny</span>,
-                           pending: <span style={{ padding: "3px 9px", background: "#1c1a08", border: "1px solid #ca8a04", borderRadius: 20, color: "#eab308", fontSize: 11, fontWeight: 700 }}>W toku</span>,
-                           rejected: <span style={{ padding: "3px 9px", background: "#1e0f0f", border: "1px solid #dc2626", borderRadius: 20, color: "#ef4444", fontSize: 11, fontWeight: 700 }}>Odrzucony</span>,
-                        }[r.status]}
+                        <Badge status={r.status} />
                       </td>
                       <td style={{ ...S.td(i%2), color: r.commission > 0 ? "#e8f0fe" : "#3a4f6a", fontWeight: 700 }}>{r.commission > 0 ? `${r.commission} zł` : "—"}</td>
                       <td style={{ ...S.td(i%2), color: r.recurring > 0 ? "#22c55e" : "#3a4f6a", fontWeight: 700 }}>{r.recurring > 0 ? `+${r.recurring} zł` : "—"}</td>
                       <td style={S.td(i%2)}>
-                        {r.status === "pending" && (
-                          <div style={{ display: "flex", gap: 6 }}>
-                            <button onClick={() => setMarkModal(r)} style={{ padding: "5px 10px", background: "linear-gradient(135deg,#166534,#22c55e)", border: "none", borderRadius: 6, color: "#fff", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>✓ Realizuj</button>
-                            <button onClick={() => {
-                          if (r.dbId) SB.patch("referrals", r.dbId, { status: "rejected" }).catch(console.error);
-                          setAllReferrals(prev => prev.map(x => x.id === r.id ? { ...x, status: "rejected" } : x));
-                        }} style={{ padding: "5px 10px", background: "none", border: "1px solid #7f1d1d", borderRadius: 6, color: "#ef4444", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>✗</button>
-                          </div>
-                        )}
-                        {r.status === "active" && <span style={{ color: "#22c55e", fontSize: 12 }}>✓ Zrealizowane</span>}
-                        {r.status === "rejected" && <span style={{ color: "#ef4444", fontSize: 12 }}>✗ Odrzucone</span>}
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                          <select value={r.status}
+                            onChange={e => {
+                              const newStatus = e.target.value;
+                              if (newStatus === "active") { setMarkModal(r); return; }
+                              if (r.dbId) SB.patch("referrals", r.dbId, { status: newStatus }).catch(console.error);
+                              setAllReferrals(prev => prev.map(x => x.id === r.id ? { ...x, status: newStatus } : x));
+                            }}
+                            style={{ background: "#0a1628", border: "1px solid #1e3a5f", borderRadius: 6, padding: "5px 8px", color: "#e8f0fe", fontSize: 12, cursor: "pointer" }}>
+                            <option value="pending">Nowe</option>
+                            <option value="contacted">Kontakt nawiązany</option>
+                            <option value="demo">Demo umówione</option>
+                            <option value="signed">Umowa podpisana</option>
+                            <option value="active">✓ Realizuj (aktywny)</option>
+                            <option value="rejected">✗ Odrzuć</option>
+                          </select>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -1975,7 +1991,7 @@ export default function App() {
               </div>
 
               <div style={{ display: "flex", gap: 16, marginBottom: 28, flexWrap: "wrap" }}>
-                <StatCard label="Do wypłaty" value={`${p.pendingPayout.toLocaleString("pl")} zł`} sub={`Najbliższa: ${p.nextPayout}`} accent="#f59e0b" icon="⏳" />
+                <StatCard label="Do wypłaty" value={`${(p.pendingPayout || referrals.filter(r=>r.status==="active").reduce((s,r)=>s+(r.commission||0),0)).toLocaleString("pl")} zł`} sub="naliczone premie jednorazowe" accent="#f59e0b" icon="⏳" />
                 <StatCard label="Łącznie wypłacono" value={`${p.totalEarned.toLocaleString("pl")} zł`} sub="całkowita historia wypłat" accent="#3b9de8" icon="💳" />
                 <StatCard label="Prowizja cykliczna" value={`${totalRecurring} zł/mies.`} sub="z aktywnych kontraktów" accent="#22c55e" icon="🔄" />
               </div>
